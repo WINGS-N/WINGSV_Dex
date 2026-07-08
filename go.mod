@@ -4,9 +4,9 @@ go 1.25.0
 
 require (
 	github.com/Microsoft/go-winio v0.6.2
-	github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808
 	github.com/vishvananda/netlink v1.3.1
 	github.com/wailsapp/wails/v3 v3.0.0-alpha2.113
+	github.com/wailsapp/wails/webview2 v1.0.28
 	golang.org/x/sys v0.46.0
 	golang.zx2c4.com/wireguard v0.0.0-20260522210424-ecfc5a8d5446
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
@@ -29,7 +29,6 @@ require (
 	github.com/mdlayher/netlink v1.7.2 // indirect
 	github.com/mdlayher/socket v0.5.1 // indirect
 	github.com/vishvananda/netns v0.0.5 // indirect
-	github.com/wailsapp/wails/webview2 v1.0.28 // indirect
 	golang.org/x/crypto v0.50.0 // indirect
 	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect

@@ -15,6 +15,7 @@ import (
 	"github.com/WINGS-N/wingsv-dex/internal/nethelper"
 	"github.com/WINGS-N/wingsv-dex/internal/services"
 	"github.com/WINGS-N/wingsv-dex/internal/shell"
+	"github.com/WINGS-N/wingsv-dex/internal/vklogin"
 	"github.com/WINGS-N/wingsv-dex/internal/vktp"
 )
 
@@ -29,6 +30,16 @@ func main() {
 	// WireGuard + protect socket under CAP_NET_ADMIN. Handled before any GUI setup.
 	if len(os.Args) > 1 && os.Args[1] == "--net-helper" {
 		if err := nethelper.Run(); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
+	// Out-of-process VK sign-in (Windows): a WebView2 process may host only one
+	// environment, and the app owns one, so the sign-in window runs here in a fresh
+	// process and returns the captured session on stdout. Handled before any GUI setup.
+	if len(os.Args) > 1 && os.Args[1] == "--vk-login" {
+		if err := vklogin.RunChild(os.Args[2:]); err != nil {
 			log.Fatal(err)
 		}
 		return

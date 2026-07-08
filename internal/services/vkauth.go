@@ -86,7 +86,7 @@ func (s *VKAuthService) Login() (VKAuthStatus, error) {
 
 func (s *VKAuthService) loginWith(link string) (VKAuthStatus, error) {
 	ua := fingerprintUA(s.store.Client().BrowserFingerprint)
-	cookies, ua, err := vklogin.Capture(link, s.storageDir(), ua)
+	cookies, ua, err := vklogin.Login(link, s.storageDir(), ua)
 	if err != nil {
 		return VKAuthStatus{}, err
 	}
