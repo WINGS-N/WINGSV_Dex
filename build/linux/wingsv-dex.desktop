@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=WINGS V
+GenericName=VPN Client
+Comment=WINGS V VPN client (VK TURN + WireGuard)
+Exec=wingsv-dex
+Icon=wingsv-dex
+Terminal=false
+Categories=Network;Security;
+Keywords=vpn;wireguard;vk;turn;
+StartupWMClass=WINGS V
+StartupNotify=false

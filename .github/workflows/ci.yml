@@ -1,0 +1,61 @@
+name: ci
+
+# Build check on every push / PR: builds the frontend (bindings + Vite) and then
+# cross-compiles the whole app for Windows (no cgo) plus vkturn for both platforms, so a
+# change cannot silently break the frontend or the Windows build.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      # GTK4 + WebKitGTK are needed to type-check the cgo `application` package during
+      # `wails3 generate bindings`.
+      - name: GUI toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
+
+      - name: Install wails3
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.113
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l $(git ls-files '*.go' | grep -vE '^(external|build)/'))
+          if [ -n "$unformatted" ]; then echo "gofmt needed:"; echo "$unformatted"; exit 1; fi
+
+      - name: Build frontend
+        run: |
+          pnpm --dir frontend install --frozen-lockfile
+          wails3 generate bindings -clean=true -time-type=Date
+          pnpm --dir frontend build
+
+      - name: Cross-compile app for Windows (no cgo)
+        run: GOOS=windows CGO_ENABLED=0 go build . ./internal/...
+
+      - name: Compile vkturn for both platforms
+        run: |
+          cd external/vk-turn-proxy
+          GOOS=windows CGO_ENABLED=0 go build -o /dev/null ./client
+          GOOS=linux   CGO_ENABLED=0 go build -o /dev/null ./client

@@ -1,0 +1,29 @@
+# Build outputs
+.task
+bin
+dist
+/wingsv-dex
+/rsrc_windows_*.syso
+frontend/dist
+frontend/.bindings-tmp-*
+external/vk-turn-proxy/bin
+
+# Dependencies
+frontend/node_modules
+
+# Generated bindings
+frontend/bindings
+
+# Packaging
+build/linux/appimage/build
+build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
+
+# Mobile generated
+build/ios/xcode/overlay.json
+build/ios/xcode/gen/
+build/android/overlay.json
+build/android/gen/
+
+# Local
+tmp
+.claude/

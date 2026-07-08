@@ -1,0 +1,36 @@
+# nfpm config for the Linux .deb (build with: VERSION=x.y.z nfpm pkg -p deb -f build/linux/nfpm.yaml -t dist/).
+# nfpm builds .deb/.rpm without dpkg, so it runs on any host and in CI.
+name: wingsv-dex
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+section: net
+priority: optional
+maintainer: WINGS-N <noreply@wingsnet.org>
+description: |
+  WINGS V desktop VPN client (VK TURN + WireGuard).
+  Wraps kernel WireGuard in DTLS-over-TURN via VK calls.
+vendor: WINGS-N
+homepage: https://github.com/WINGS-N/wingsv-dex
+license: GPL-3.0-only
+
+depends:
+  - libgtk-4-1
+  - libwebkitgtk-6.0-4
+  - nftables
+  - pkexec | policykit-1
+
+contents:
+  - src: ./bin/wingsv-dex
+    dst: /usr/lib/wingsv-dex/wingsv-dex
+  - src: ./bin/vkturn
+    dst: /usr/lib/wingsv-dex/vkturn
+  # os.Executable() resolves /proc/self/exe to the real path, so the app finds vkturn
+  # next to it in /usr/lib/wingsv-dex even when launched via this symlink.
+  - src: /usr/lib/wingsv-dex/wingsv-dex
+    dst: /usr/bin/wingsv-dex
+    type: symlink
+  - src: ./build/linux/wingsv-dex.desktop
+    dst: /usr/share/applications/wingsv-dex.desktop
+  - src: ./build/appicon.png
+    dst: /usr/share/icons/hicolor/512x512/apps/wingsv-dex.png

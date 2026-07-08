@@ -1,0 +1,2398 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =========================================================================
+   FONTS — Samsung Sharp Sans (Latin headings) + SamsungOne (everything else).
+   ========================================================================= */
+
+@font-face {
+  font-family: 'SamsungOne';
+  src: url('/fonts/samsungone_400.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'SamsungOne';
+  src: url('/fonts/samsungone_700.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'SamsungSharpSans';
+  src: url('/fonts/samsungsharpsans_medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'SamsungSharpSans';
+  src: url('/fonts/samsungsharpsans_bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+}
+
+/* =========================================================================
+   BASE — pure-black canvas, no gradients. Mirrors Samsung Account.
+   ========================================================================= */
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    @apply bg-wings-page;
+  }
+
+  body {
+    @apply relative m-0 h-screen overflow-hidden font-samsung text-wings-text antialiased;
+  }
+
+  html {
+    overflow-x: clip;
+  }
+
+  /* Defensive: keep flex/grid items from inflating their parent past viewport. */
+  body * {
+    min-width: 0;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply m-0 font-sharp;
+    letter-spacing: -0.005em;
+  }
+
+  a {
+    color: inherit;
+  }
+
+  ::selection {
+    background: rgba(18, 89, 209, 0.45);
+  }
+}
+
+/* =========================================================================
+   SAMSUNG ACCOUNT TOP BAR — wordmark left, account/extra link right.
+   ========================================================================= */
+
+@layer components {
+  .samsung-topbar {
+    @apply mx-auto flex w-full items-center justify-between gap-6 px-6 pt-7 pb-4;
+    max-width: 1680px;
+  }
+
+  @media (min-width: 768px) {
+    .samsung-topbar {
+      @apply px-10 pt-9;
+    }
+  }
+
+  .samsung-topbar-brand {
+    @apply inline-flex items-center font-sharp text-[22px] font-bold tracking-[-0.01em] text-wings-text no-underline;
+    gap: 6px;
+  }
+
+  .samsung-topbar-divider {
+    @apply text-wings-muted;
+    font-weight: 400;
+    margin: 0 6px;
+  }
+
+  .samsung-topbar-tag {
+    @apply font-sharp text-wings-muted;
+    font-weight: 500;
+    font-size: 14px;
+    letter-spacing: 0;
+  }
+
+  .samsung-topbar-link {
+    @apply text-[15px] text-wings-text no-underline transition-opacity hover:opacity-80;
+  }
+
+  .samsung-topbar-avatar {
+    @apply flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-[14px] font-bold text-wings-text;
+    background-image: linear-gradient(140deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.06));
+  }
+
+  /* =====================================================================
+     PAGE SHELLS
+     ===================================================================== */
+
+  .page-shell {
+    @apply mx-auto grid w-full gap-6 px-6 pb-16;
+    max-width: 1240px;
+  }
+
+  @media (min-width: 768px) {
+    .page-shell {
+      @apply px-10;
+    }
+  }
+
+  .hero-header {
+    @apply flex flex-col items-center gap-3 pt-6 pb-4;
+  }
+
+  .wordmark-inline {
+    @apply font-sharp font-bold tracking-[-0.01em];
+  }
+
+  .hero-wordmark {
+    @apply text-center font-sharp font-bold leading-[0.92] tracking-[-0.005em] text-wings-text;
+    font-size: clamp(48px, 8vw, 88px);
+  }
+
+  .section-kicker {
+    @apply text-[12px] font-bold uppercase tracking-[0.14em] text-wings-kicker;
+  }
+
+  .hero-kicker {
+    @apply text-center;
+  }
+
+  .hero-title {
+    @apply font-sharp font-bold leading-[1.1] tracking-[-0.005em] text-wings-text;
+    font-size: clamp(28px, 3.4vw, 38px);
+  }
+
+  .section-title {
+    @apply font-sharp font-bold leading-[1.1] tracking-[-0.005em] text-wings-text;
+    font-size: clamp(24px, 3vw, 32px);
+  }
+
+  .body-copy {
+    @apply max-w-[64ch] leading-[1.6] text-wings-muted;
+    overflow-wrap: anywhere;
+  }
+
+  .section-title,
+  .hero-title {
+    overflow-wrap: anywhere;
+  }
+
+  /* =====================================================================
+     SAMSUNG ACCOUNT CARD SURFACES
+     Solid dark fills, very subtle borders, generous radius (~24px).
+     No glassmorphism, no glow.
+     ===================================================================== */
+
+  .surface-card {
+    @apply rounded-[28px] border border-wings-border bg-wings-card p-7 text-wings-text shadow-card;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  /* Inset surface used inside cards — tabs panes, form sections, list rows. */
+  .surface-inset {
+    @apply rounded-[20px] border border-wings-border bg-wings-surface p-5;
+  }
+
+  .entry-card,
+  .release-card {
+    @apply mt-6 rounded-[20px] border border-wings-border bg-wings-surface p-5;
+  }
+
+  /* =====================================================================
+     SAMSUNG ACCOUNT INPUTS — underline-only, label slides up + turns blue.
+     ===================================================================== */
+
+  .field-label {
+    @apply mb-1 block text-[13px] font-normal text-wings-kicker;
+    transition: color 150ms ease;
+  }
+
+  .field-label.is-focused {
+    color: theme('colors.wings.accent');
+  }
+
+  .text-input,
+  .link-input {
+    @apply block w-full border-0 border-b bg-transparent px-0 py-2 text-[15px] leading-[1.4] text-wings-text outline-none transition-colors;
+    border-bottom: 1px solid theme('colors.wings.inputLine');
+    border-radius: 0;
+    font: inherit;
+    font-size: 15px;
+  }
+
+  .link-input {
+    @apply min-h-[120px] resize-y py-3;
+  }
+
+  .text-input::placeholder,
+  .link-input::placeholder {
+    color: rgba(252, 252, 252, 0.32);
+  }
+
+  .text-input:hover,
+  .link-input:hover {
+    border-bottom-color: rgba(255, 255, 255, 0.5);
+  }
+
+  .text-input:focus,
+  .link-input:focus,
+  .text-input:focus-visible,
+  .link-input:focus-visible {
+    border-bottom-color: theme('colors.wings.accent');
+  }
+
+  /* When the input is focused, lift its preceding label colour to Samsung blue.
+     Used via .field-label.is-focused, but also as :focus-within on a wrapper. */
+  .input-field {
+    @apply flex flex-col;
+  }
+
+  .input-field:focus-within > .field-label {
+    color: theme('colors.wings.accent');
+  }
+
+  /* =====================================================================
+     BUTTONS — solid Samsung blue pill primary, neutral pill secondary.
+     ===================================================================== */
+
+  .actions-row {
+    @apply mt-5 flex flex-wrap gap-3;
+  }
+
+  .action-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border-none px-6 font-samsung text-[15px] font-bold leading-none transition-colors duration-150 ease-in-out;
+    min-height: 48px;
+  }
+
+  .action-button:disabled {
+    @apply cursor-default;
+    opacity: 0.45;
+  }
+
+  .button-primary {
+    @apply action-button text-white;
+    background: theme('colors.wings.accent');
+  }
+
+  .button-primary:hover:not(:disabled) {
+    background: theme('colors.wings.accentHover');
+  }
+
+  .button-secondary,
+  .button-ghost {
+    @apply action-button text-wings-text;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .button-secondary:hover:not(:disabled),
+  .button-ghost:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.14);
+  }
+
+  .button-ghost {
+    text-decoration: none;
+  }
+
+  .button-text {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-[14px] font-bold;
+    color: theme('colors.wings.accent');
+    background: transparent;
+  }
+
+  .button-text:hover:not(:disabled) {
+    background: rgba(18, 89, 209, 0.14);
+  }
+
+  .button-icon {
+    @apply h-4 w-4 flex-shrink-0;
+  }
+
+  /* Loader spinner reused inside buttons. */
+  .samsung-button-loader-slot {
+    display: inline-flex;
+    width: 16px;
+    height: 16px;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 16px;
+  }
+
+  .samsung-button-loader {
+    position: relative;
+    width: 6px;
+    height: 6px;
+    animation: samsung-loader-rotate 1.4s linear infinite;
+  }
+
+  .samsung-button-loader-dot {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: rgb(255, 255, 255);
+    will-change: transform;
+    backface-visibility: hidden;
+  }
+
+  .samsung-button-loader-dot-top {
+    animation: samsung-loader-scatter-tl 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  }
+  .samsung-button-loader-dot-right {
+    animation: samsung-loader-scatter-tr 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  }
+  .samsung-button-loader-dot-bottom {
+    animation: samsung-loader-scatter-br 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  }
+  .samsung-button-loader-dot-left {
+    animation: samsung-loader-scatter-bl 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  }
+
+  /* =====================================================================
+     SECTION HEADS / BADGES / CHIPS (landing-side cards).
+     ===================================================================== */
+
+  .section-head,
+  .release-topline {
+    @apply flex min-w-0 items-start justify-between gap-4;
+  }
+
+  .section-head > div,
+  .release-topline > div {
+    @apply min-w-0 flex-1;
+  }
+
+  .badge-pill {
+    @apply whitespace-nowrap rounded-full bg-wings-badgeBg px-3 py-1.5 text-[12px] font-bold uppercase tracking-[0.08em] text-wings-badgeText;
+  }
+
+  .profiles-block {
+    @apply mt-5;
+  }
+
+  .profiles-title {
+    @apply mb-2 text-[13px] text-wings-muted;
+  }
+
+  .chips-row {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .chip-pill {
+    @apply rounded-full border border-wings-border bg-wings-chip px-3 py-1.5 text-[13px] text-wings-text;
+  }
+
+  .release-tag {
+    @apply text-[22px] font-bold;
+  }
+
+  .preview-sections {
+    @apply mt-7 flex flex-col gap-6;
+  }
+
+  .preview-section {
+    @apply flex flex-col gap-3;
+  }
+
+  .preview-section.is-warning {
+    @apply rounded-[18px] border border-amber-300/30 bg-amber-300/10 p-4;
+  }
+
+  .preview-section.is-warning .preview-section-title {
+    @apply text-amber-200;
+  }
+
+  .preview-section-title {
+    @apply text-[12px] font-bold uppercase tracking-[0.14em] text-wings-kicker;
+  }
+
+  .preview-section-note {
+    @apply text-[13px] leading-snug text-amber-100/90;
+  }
+
+  .preview-list {
+    @apply overflow-hidden rounded-[18px] border border-wings-border bg-wings-surface;
+  }
+
+  .preview-row {
+    @apply flex min-w-0 items-center justify-between gap-4 px-5 py-3;
+  }
+
+  .preview-row + .preview-row {
+    border-top: 1px solid theme('colors.wings.divider');
+  }
+
+  .preview-row-label {
+    @apply shrink-0 text-[14px] text-wings-muted;
+  }
+
+  .preview-row-value {
+    @apply min-w-0 text-right text-[15px] font-semibold leading-[1.4] text-wings-text;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .preview-items {
+    @apply flex flex-col;
+  }
+
+  .preview-item {
+    @apply min-w-0 px-5 py-3 text-[14px] leading-[1.4] text-wings-text;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .preview-item + .preview-item {
+    border-top: 1px solid theme('colors.wings.divider');
+  }
+
+  .preview-item-index {
+    @apply mr-3 inline-block min-w-[22px] text-wings-muted;
+  }
+
+  .release-meta {
+    @apply mt-2 text-[14px] text-wings-muted;
+  }
+
+  .download-block {
+    @apply mt-5;
+  }
+
+  .progress-row {
+    @apply mb-2 flex justify-between gap-3 text-[13px] text-wings-mutedStrong;
+  }
+
+  .progress-track {
+    @apply h-[6px] w-full overflow-hidden rounded-full;
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .progress-fill {
+    @apply h-full rounded-inherit transition-[width] duration-200 ease-out;
+    background: theme('colors.wings.accent');
+  }
+
+  .state-error {
+    @apply mt-3 text-[14px] text-wings-danger;
+  }
+
+  /* =====================================================================
+     LOADER (shared with the button loader).
+     ===================================================================== */
+
+  .loading-layout {
+    @apply flex min-h-[248px] items-center justify-center;
+  }
+
+  .loading-shell {
+    @apply flex h-full w-full items-center justify-center rounded-[20px] bg-white/[0.02] p-6;
+  }
+
+  .samsung-loader {
+    position: relative;
+    width: 11.25px;
+    height: 11.25px;
+    flex-shrink: 0;
+    animation: samsung-loader-rotate 1s linear infinite;
+  }
+
+  .samsung-loader-dot {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 11.25px;
+    height: 11.25px;
+    border-radius: 999px;
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  .samsung-loader-dot-top {
+    background: #3781f6;
+    animation: samsung-loader-big-tl 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  }
+  .samsung-loader-dot-right {
+    background: #61d299;
+    animation: samsung-loader-big-tr 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  }
+  .samsung-loader-dot-bottom {
+    background: #3781f6;
+    animation: samsung-loader-big-br 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  }
+  .samsung-loader-dot-left {
+    background: #3781f6;
+    animation: samsung-loader-big-bl 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  }
+
+  /* =====================================================================
+     ADMIN SHELL — Samsung Account-style HORIZONTAL header + content area.
+     The grid used to be sidebar-left; now it's a single column under a
+     header bar of underline tabs.
+     ===================================================================== */
+
+  .admin-shell {
+    @apply mx-auto flex w-full flex-col gap-6 pb-12;
+    max-width: 1680px;
+    overflow-x: clip;
+    padding-left: max(env(safe-area-inset-left), 24px);
+    padding-right: max(env(safe-area-inset-right), 24px);
+  }
+
+  @media (min-width: 768px) {
+    .admin-shell {
+      padding-left: 40px;
+      padding-right: 40px;
+    }
+  }
+
+  .admin-header {
+    @apply mt-8 flex flex-col gap-6;
+  }
+
+  .admin-brand-row {
+    @apply flex items-center justify-between gap-6;
+  }
+
+  .admin-brand {
+    @apply flex items-baseline gap-2 font-sharp text-[20px] font-bold tracking-[-0.01em] text-wings-text;
+  }
+
+  .admin-brand-mark {
+    @apply font-sharp text-[20px] tracking-[-0.01em];
+  }
+
+  .admin-brand-divider {
+    @apply font-sharp text-[18px] text-wings-kicker;
+    opacity: 0.5;
+  }
+
+  .admin-brand-tag {
+    @apply font-sharp text-[14px] tracking-[0] text-wings-kicker;
+  }
+
+  /* Right side of the brand row: account chip with avatar. */
+  .admin-account-chip {
+    @apply flex items-center gap-3 rounded-full border border-wings-border bg-wings-surface px-2 py-1 text-[14px] text-wings-text;
+  }
+
+  .admin-account-chip-avatar {
+    @apply flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-bold text-white;
+    background: linear-gradient(140deg, #1259d1 0%, #5db4ff 100%);
+  }
+
+  .admin-account-chip-avatar img {
+    @apply h-full w-full object-cover;
+  }
+
+  .admin-account-chip-name {
+    @apply hidden pr-3 text-[13px] text-wings-text;
+  }
+
+  /* On narrow screens drop the pill wrapper so the avatar reads as a plain
+     circular button (matches the One UI spec). */
+  @media (max-width: 639.98px) {
+    .admin-account-chip {
+      border: 0;
+      background: transparent;
+      padding: 0;
+      gap: 0;
+    }
+  }
+
+  @media (min-width: 640px) {
+    .admin-account-chip-name {
+      @apply inline;
+    }
+  }
+
+  /* The big page label + horizontal underline-tab navigation, exactly like
+     "Учетная запись" + (Профиль / Безопасность / …) on Samsung Account. */
+  .admin-titlebar {
+    @apply flex flex-wrap items-end justify-between gap-x-10 gap-y-4 border-b border-wings-divider pb-1;
+  }
+
+  .admin-page-label {
+    @apply font-sharp text-[26px] font-bold tracking-[-0.005em] text-wings-text;
+  }
+
+  .admin-nav {
+    @apply -mb-px flex flex-nowrap items-end gap-x-8 gap-y-2;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .admin-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .admin-nav-link {
+    @apply relative inline-flex flex-shrink-0 items-center gap-2 whitespace-nowrap px-1 pb-3 pt-2 text-[15px] font-normal text-wings-muted no-underline transition-colors hover:text-wings-text;
+    border-bottom: 2px solid transparent;
+  }
+
+  .admin-nav-link.is-active {
+    @apply font-bold text-wings-text;
+    border-bottom-color: theme('colors.wings.accent');
+  }
+
+  .admin-nav-icon {
+    @apply h-4 w-4 flex-shrink-0;
+  }
+
+  .admin-main {
+    @apply flex flex-col gap-5;
+  }
+
+  .admin-banner {
+    @apply rounded-[20px] border border-amber-300/30 bg-amber-300/10 px-5 py-3 text-[14px] text-amber-100;
+  }
+
+  .admin-banner a {
+    @apply text-amber-100 underline;
+  }
+
+  /* Cards inside the admin area pick up the same surface-card aesthetic but
+     keep .admin-card as a slot for layout-specific tweaks. */
+  .admin-card {
+    @apply surface-card flex flex-col gap-4;
+  }
+
+  .admin-card-header {
+    @apply flex items-start justify-between gap-3;
+  }
+
+  .admin-detail-header {
+    @apply flex-wrap;
+  }
+
+  .admin-detail-actions {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .admin-back-link {
+    @apply inline-flex items-center gap-1 text-[13px] text-wings-muted no-underline hover:text-wings-text;
+  }
+
+  .admin-card-title {
+    @apply font-sharp text-[24px] font-bold tracking-[-0.005em];
+  }
+
+  .admin-section-subtitle {
+    @apply mt-3 font-sharp text-[18px] font-bold tracking-[-0.005em];
+  }
+
+  .admin-error {
+    @apply text-[14px] text-wings-danger;
+  }
+
+  .admin-success {
+    @apply text-[14px] text-emerald-300;
+  }
+
+  .admin-success-box {
+    @apply rounded-[16px] border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-[13px] text-wings-text;
+  }
+
+  .admin-muted {
+    @apply text-[13px] text-wings-muted;
+  }
+
+  .admin-mono {
+    font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+    @apply inline-block max-w-full rounded-md bg-white/10 px-1.5 py-0.5 text-[12px];
+    word-break: break-all;
+    overflow-wrap: anywhere;
+  }
+
+  /* =====================================================================
+     ADMIN — TABLES / ROWS / TABS / PILLS / PAGINATION
+     ===================================================================== */
+
+  .admin-table {
+    @apply mt-2 w-full border-collapse text-[14px];
+  }
+
+  .admin-table th {
+    @apply pb-3 pr-4 text-left text-[11px] font-bold uppercase tracking-[0.14em] text-wings-kicker;
+  }
+
+  .admin-table td {
+    @apply border-t border-wings-divider py-3 pr-4 align-top;
+  }
+
+  .admin-row {
+    @apply cursor-pointer transition-colors;
+  }
+
+  .admin-row:hover {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .admin-row-name {
+    @apply font-bold;
+  }
+
+  .admin-row-actions-col {
+    width: 56px;
+  }
+
+  .admin-row-actions {
+    @apply text-right align-middle;
+    width: 56px;
+  }
+
+  .admin-row-action-btn {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors;
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(252, 252, 252, 0.62);
+  }
+
+  .admin-row-action-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.09);
+    color: #fbfbfb;
+  }
+
+  .admin-row-action-btn:disabled {
+    opacity: 0.55;
+    cursor: progress;
+  }
+
+  .admin-row-action-danger:hover:not(:disabled) {
+    background: rgba(255, 122, 140, 0.18);
+    color: #ff7a8c;
+  }
+
+  .button-primary.admin-row-action-danger {
+    background: #ff5b6f;
+    color: #fff;
+  }
+
+  .button-primary.admin-row-action-danger:hover:not(:disabled) {
+    background: #ff7a8c;
+  }
+
+  .admin-pill {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.1em];
+  }
+
+  .admin-pill.is-online {
+    background: rgba(35, 168, 110, 0.18);
+    color: #6fe3a4;
+  }
+
+  .admin-pill.is-offline {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(252, 252, 252, 0.55);
+  }
+
+  .admin-pill.is-info {
+    background: rgba(18, 89, 209, 0.2);
+    color: #8bb8ff;
+  }
+
+  .admin-pill-row {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .admin-pill-button {
+    @apply inline-flex items-center gap-2 rounded-full border border-wings-border bg-white/[0.04] px-3 py-1.5 text-[13px] text-wings-muted transition-colors;
+  }
+
+  .admin-pill-button:hover {
+    @apply text-wings-text;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .admin-pill-button.is-active {
+    @apply text-wings-text;
+    background: rgba(18, 89, 209, 0.18);
+    border-color: rgba(18, 89, 209, 0.45);
+  }
+
+  .admin-pill-count {
+    @apply rounded-full bg-white/10 px-1.5 py-0.5 text-[11px] text-wings-muted;
+  }
+
+  .segmented-control {
+    @apply inline-flex w-full max-w-md gap-1 rounded-full border border-wings-border p-1;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .segmented-control-pill {
+    @apply flex-1 rounded-full px-4 py-2 text-[13px] text-wings-muted transition-colors;
+  }
+
+  .segmented-control-pill:hover {
+    @apply text-wings-text;
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .segmented-control-pill.is-active {
+    @apply text-wings-text;
+    background: rgba(18, 89, 209, 0.22);
+  }
+
+  .routing-mode-picker {
+    @apply flex w-full max-w-md items-start justify-around gap-2;
+  }
+
+  .routing-mode-item {
+    @apply flex flex-1 cursor-pointer flex-col items-center gap-2 rounded-xl py-2 text-wings-muted transition-colors;
+  }
+
+  .routing-mode-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .routing-mode-item.is-active {
+    @apply text-wings-text;
+  }
+
+  .routing-mode-circle {
+    @apply flex h-14 w-14 items-center justify-center rounded-full transition-colors;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .routing-mode-item.is-active .routing-mode-circle {
+    background: rgba(18, 89, 209, 0.85);
+    color: #fff;
+  }
+
+  .routing-mode-label {
+    @apply text-[13px];
+  }
+
+  .admin-pagination {
+    @apply mt-4 flex items-center justify-between gap-3;
+  }
+
+  .th-sort {
+    @apply inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent text-inherit transition-colors;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+  }
+
+  .th-sort:hover {
+    color: theme('colors.wings.text');
+  }
+
+  .client-avatar {
+    @apply flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full font-sharp text-[13px] font-bold text-white;
+    background: linear-gradient(140deg, #1259d1 0%, #5db4ff 100%);
+    letter-spacing: -0.005em;
+  }
+
+  .client-avatar-lg {
+    @apply h-14 w-14 text-[20px];
+  }
+
+  .client-page {
+    @apply flex flex-col gap-4;
+  }
+
+  .client-grid {
+    @apply grid gap-4;
+    grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
+  }
+
+  .master-scope-grid {
+    @apply grid gap-2;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+
+  .master-scope-row {
+    @apply flex items-center justify-between gap-3 rounded-2xl border px-4 py-3;
+    border-color: theme('colors.wings.border');
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .master-scope-row > div {
+    @apply min-w-0 flex-1;
+  }
+
+  .master-scope-label {
+    @apply text-[15px] font-bold;
+    color: theme('colors.wings.text');
+  }
+
+  .master-scope-hint {
+    @apply text-[13px];
+    color: theme('colors.wings.muted');
+    word-break: break-word;
+  }
+
+  @media (max-width: 480px) {
+    .master-scope-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .master-scope-row {
+      @apply px-3 py-3;
+    }
+  }
+
+  @media (max-width: 1000px) {
+    .client-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .keyvals {
+    display: grid;
+    gap: 14px 24px;
+    grid-template-columns: 160px 1fr;
+    align-items: baseline;
+    margin: 0;
+  }
+
+  .keyvals dt {
+    color: theme('colors.wings.muted');
+    font-size: 13px;
+  }
+
+  .keyvals dd {
+    margin: 0;
+    color: theme('colors.wings.text');
+    font-size: 14px;
+    word-break: break-all;
+  }
+
+  .keyvals dd.mono {
+    font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+    font-size: 13px;
+  }
+
+  .qr-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 0;
+  }
+
+  .qr-frame {
+    width: 240px;
+    height: 240px;
+    padding: 8px;
+    background: #fff;
+    border-radius: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .qr-frame img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+  }
+
+  .qr-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(16, 19, 26, 0.55);
+  }
+
+  /* Internal sub-tabs (e.g. on the client detail view). Match the same
+     underline-tab vocabulary as the top-level admin nav. */
+  .admin-tabs,
+  .admin-log-tabs {
+    @apply -mb-px flex flex-wrap gap-x-6 gap-y-2 border-b border-wings-divider;
+  }
+
+  .admin-tab {
+    @apply relative inline-flex items-center gap-2 px-1 pb-3 pt-2 text-[14px] text-wings-muted transition-colors hover:text-wings-text;
+    border-bottom: 2px solid transparent;
+  }
+
+  .admin-tab.is-active {
+    @apply font-bold text-wings-text;
+    border-bottom-color: theme('colors.wings.accent');
+  }
+
+  .admin-tab-pane {
+    @apply pt-5;
+  }
+
+  .admin-config-area {
+    font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+    @apply mt-3 text-[13px];
+  }
+
+  .admin-code,
+  .admin-log-pane {
+    font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+    @apply mt-2 max-h-[420px] overflow-auto rounded-[16px] bg-black p-4 text-[12px] text-wings-text/90;
+    border: 1px solid theme('colors.wings.border');
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .admin-log-controls {
+    @apply mb-3 flex flex-wrap gap-3;
+  }
+
+  .admin-checkbox {
+    @apply flex items-center gap-2 text-[13px] text-wings-mutedStrong;
+  }
+
+  .admin-account-form {
+    @apply mt-4;
+  }
+
+  .admin-cmd-grid {
+    @apply mt-4 grid grid-cols-2 gap-3;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+
+  /* =====================================================================
+     ADMIN — RULES / APPS / LIST ITEMS / FORMS
+     ===================================================================== */
+
+  .admin-rule-card {
+    @apply flex items-stretch gap-3 rounded-[18px] border border-wings-border bg-wings-surface p-3;
+  }
+
+  .admin-rule-card.is-dragging {
+    @apply opacity-50;
+  }
+
+  .admin-rule-card.is-drag-over {
+    border-color: rgba(35, 168, 110, 0.6);
+    box-shadow: 0 0 0 2px rgba(35, 168, 110, 0.35);
+  }
+
+  .admin-rule-handle {
+    @apply flex w-8 cursor-grab items-center justify-center text-wings-muted;
+  }
+
+  .admin-rule-handle:active {
+    @apply cursor-grabbing;
+  }
+
+  .admin-rule-body {
+    @apply flex min-w-0 flex-1 flex-col gap-2;
+  }
+
+  .admin-rule-actions {
+    @apply flex items-start;
+  }
+
+  .admin-apps-grid {
+    @apply gap-2;
+  }
+
+  .admin-apps-item {
+    @apply flex items-center gap-3 rounded-[16px] border border-wings-border bg-wings-surface p-2 pr-3;
+  }
+
+  .admin-apps-item.is-routed {
+    border-color: rgba(35, 168, 110, 0.4);
+    background: rgba(35, 168, 110, 0.1);
+  }
+
+  .admin-apps-icon {
+    @apply h-10 w-10 flex-shrink-0 rounded-xl bg-white/10 object-contain;
+  }
+
+  .admin-apps-icon-fallback {
+    @apply flex items-center justify-center text-[18px] font-bold text-wings-text;
+  }
+
+  .admin-apps-text {
+    @apply flex min-w-0 flex-1 flex-col;
+  }
+
+  .admin-apps-text strong {
+    @apply truncate;
+  }
+
+  .admin-apps-text .admin-muted {
+    @apply truncate text-[12px];
+  }
+
+  /* Sticky save bar on settings views. */
+  .admin-sticky-bar {
+    @apply sticky top-2 z-10 flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-wings-border bg-wings-card/95 px-4 py-3 backdrop-blur;
+  }
+
+  .admin-list-row {
+    @apply flex flex-wrap items-start justify-between gap-3;
+  }
+
+  .admin-list-text {
+    @apply flex flex-col gap-0.5;
+  }
+
+  .admin-list-actions {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .admin-list {
+    @apply flex list-none flex-col gap-3 pl-0;
+  }
+
+  .admin-list-item {
+    @apply rounded-[18px] border border-wings-border bg-wings-surface p-4 transition-colors;
+  }
+
+  .admin-list-item.is-selected {
+    border-color: rgba(35, 168, 110, 0.4);
+    background: rgba(35, 168, 110, 0.1);
+  }
+
+  .admin-radio {
+    @apply flex h-5 w-5 flex-shrink-0 items-center justify-center self-center rounded-full transition-colors;
+    border: 2px solid rgba(255, 255, 255, 0.32);
+  }
+
+  .admin-radio.is-selected {
+    border-color: #6fe3a4;
+  }
+
+  .admin-radio-dot {
+    @apply h-2.5 w-2.5 rounded-full opacity-0 transition-opacity;
+    background: #6fe3a4;
+  }
+
+  .admin-radio.is-selected .admin-radio-dot {
+    @apply opacity-100;
+  }
+
+  .admin-config-import {
+    @apply mt-3 rounded-[16px] border border-wings-border bg-wings-surface p-3;
+  }
+
+  .admin-config-import summary {
+    @apply cursor-pointer text-[14px] text-wings-mutedStrong;
+  }
+
+  .admin-import-area {
+    font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+    @apply mt-2 text-[13px];
+  }
+
+  .config-mode-tabs {
+    @apply mt-2 flex flex-wrap items-center gap-2 border-b border-wings-divider pb-3;
+  }
+
+  .admin-follow-toggle {
+    @apply ml-auto inline-flex items-center gap-2;
+  }
+
+  .admin-follow-label {
+    @apply text-[13px] text-wings-mutedStrong;
+  }
+
+  .config-form {
+    @apply mt-3 flex flex-col gap-5;
+  }
+
+  .form-section {
+    @apply rounded-[20px] border border-wings-border bg-wings-surface p-5;
+  }
+
+  .form-section-title {
+    @apply mb-3 font-sharp text-[16px] font-bold tracking-[-0.005em] text-wings-text;
+  }
+
+  .form-row {
+    @apply flex items-center justify-between gap-4 py-2;
+  }
+
+  .form-row.form-row-stack {
+    @apply flex-col items-stretch gap-1;
+  }
+
+  .form-label {
+    @apply text-[14px] text-wings-mutedStrong;
+  }
+
+  .provision-field-control,
+  .management-toggle-control {
+    @apply inline-flex items-center gap-3;
+  }
+
+  .management-toggle {
+    @apply flex items-center;
+  }
+
+  .provision-loader,
+  .management-toggle-loader {
+    @apply inline-flex flex-shrink-0 items-center;
+  }
+
+  .form-input-narrow {
+    @apply w-[140px];
+  }
+
+  /* =====================================================================
+     ADMIN MODAL
+     ===================================================================== */
+
+  .admin-modal-backdrop {
+    @apply fixed inset-0 z-50 flex items-center justify-center px-4;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+
+  .admin-modal {
+    @apply w-[min(560px,calc(100vw-32px))];
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  }
+
+  .seed-mode-row {
+    @apply mt-2 flex flex-wrap gap-3;
+  }
+
+  .seed-mode-option {
+    @apply inline-flex cursor-pointer items-center gap-2 text-[14px];
+  }
+
+  .seed-mode-option input[disabled] + span {
+    @apply opacity-50;
+  }
+
+  .copyable-link {
+    @apply mt-3 flex flex-col gap-2;
+  }
+
+  .copyable-link-text {
+    font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+    @apply min-h-[80px] text-[13px];
+  }
+
+  .copyable-link-button {
+    @apply self-start;
+  }
+
+  /* =====================================================================
+     ONE UI FORM CONTROLS — checkbox, switch, select.
+     Match the Samsung Account look: blue-filled circular check, blue track,
+     borderless underline-style select.
+     ===================================================================== */
+
+  .oneui-checkbox {
+    @apply inline-flex cursor-pointer select-none items-center gap-2;
+  }
+
+  .oneui-checkbox.is-disabled {
+    @apply cursor-default opacity-50;
+  }
+
+  .oneui-checkbox-input {
+    @apply absolute h-px w-px opacity-0;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .oneui-checkbox-box {
+    @apply inline-flex h-5 w-5 items-center justify-center rounded-full bg-transparent transition-colors;
+    border: 1.5px solid rgba(252, 252, 252, 0.45);
+  }
+
+  .oneui-checkbox:hover .oneui-checkbox-box {
+    border-color: rgba(252, 252, 252, 0.75);
+  }
+
+  .oneui-checkbox-input:focus-visible + .oneui-checkbox-box {
+    box-shadow: 0 0 0 3px rgba(18, 89, 209, 0.45);
+  }
+
+  .oneui-checkbox-input:checked + .oneui-checkbox-box {
+    border-color: transparent;
+    background: theme('colors.wings.accent');
+  }
+
+  .oneui-checkbox-tick {
+    @apply h-3.5 w-3.5 text-white;
+  }
+
+  .oneui-checkbox-label {
+    @apply text-[14px] text-wings-mutedStrong;
+  }
+
+  .oneui-switch {
+    @apply inline-flex h-6 cursor-pointer items-center;
+  }
+
+  .oneui-switch.is-disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+
+  .oneui-switch-input {
+    @apply absolute h-px w-px opacity-0;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .oneui-switch-track {
+    @apply relative inline-flex h-[22px] w-[40px] flex-shrink-0 items-center rounded-full transition-colors;
+    background: rgba(255, 255, 255, 0.18);
+  }
+
+  .oneui-switch-input:focus-visible + .oneui-switch-track {
+    box-shadow: 0 0 0 3px rgba(18, 89, 209, 0.45);
+  }
+
+  .oneui-switch-input:checked + .oneui-switch-track {
+    background: theme('colors.wings.accent');
+  }
+
+  .oneui-switch-thumb {
+    @apply absolute left-[2px] top-[2px] h-[18px] w-[18px] rounded-full bg-white shadow transition-transform;
+  }
+
+  .oneui-switch-input:checked + .oneui-switch-track .oneui-switch-thumb {
+    transform: translateX(18px);
+  }
+
+  .oneui-select-wrapper {
+    @apply relative inline-flex items-center;
+  }
+
+  .oneui-select {
+    @apply rounded-full border border-wings-border bg-wings-surface py-2 pl-4 pr-9 text-[14px] text-wings-text outline-none transition-colors;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: none;
+    min-width: 180px;
+  }
+
+  .oneui-select:focus-visible {
+    border-color: theme('colors.wings.accent');
+  }
+
+  .oneui-select-chevron {
+    @apply pointer-events-none absolute right-3 h-4 w-4 text-wings-muted;
+  }
+
+  /* =====================================================================
+     SMALL ICON BUTTON (e.g. copy-link).
+     ===================================================================== */
+
+  .icon-button {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-full border border-wings-border bg-white/[0.04] text-wings-text transition-colors;
+  }
+
+  .icon-button:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  /* =====================================================================
+     LANDING — preview / VK link / etc. existing utility tweaks.
+     ===================================================================== */
+
+  .vk-link-row {
+    @apply mt-2 flex items-start gap-2;
+  }
+
+  .vk-link-row textarea {
+    @apply flex-1;
+  }
+}
+
+/* =========================================================================
+   UTILITIES
+   ========================================================================= */
+
+@layer utilities {
+  .rounded-inherit {
+    border-radius: inherit;
+  }
+}
+
+/* =========================================================================
+   RESPONSIVE — mobile compaction.
+   ========================================================================= */
+
+@media (max-width: 880px) {
+  .admin-shell {
+    padding-left: 16px;
+    padding-right: 16px;
+    gap: 16px;
+    padding-bottom: 32px;
+  }
+
+  .admin-titlebar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-nav {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    gap: 24px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    /* Bound the scroll box to the column width so its items overflow INSIDE the
+       nav (which scrolls) instead of widening the clipped shell (no scroll). */
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .admin-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .admin-nav-link {
+    white-space: nowrap;
+    flex: 0 0 auto;
+    min-width: max-content;
+  }
+
+  .admin-card,
+  .surface-card {
+    padding: 18px 16px;
+    border-radius: 22px;
+  }
+
+  .admin-card-title {
+    font-size: 20px;
+  }
+
+  .admin-card-header,
+  .admin-detail-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-detail-actions {
+    flex-direction: row;
+  }
+
+  .admin-table thead {
+    display: none;
+  }
+
+  .admin-table,
+  .admin-table tbody,
+  .admin-table tr,
+  .admin-table td {
+    display: block;
+  }
+
+  .admin-table tr {
+    margin-bottom: 12px;
+    border-radius: 18px;
+    border: 1px solid theme('colors.wings.border');
+    background: theme('colors.wings.surface');
+    padding: 12px;
+  }
+
+  .admin-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 0;
+    padding: 4px 0;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .admin-table td > * {
+    min-width: 0;
+    text-align: right;
+    max-width: 100%;
+  }
+
+  .admin-table td::before {
+    content: attr(data-label);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: theme('colors.wings.kicker');
+    flex-shrink: 0;
+    text-align: left;
+  }
+
+  .admin-table .admin-row-actions {
+    width: auto;
+    justify-content: flex-end;
+  }
+
+  .admin-table .admin-row-actions::before {
+    display: none;
+  }
+
+  .admin-tabs,
+  .admin-log-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    margin-left: -8px;
+    padding-left: 8px;
+    scrollbar-width: none;
+  }
+
+  .admin-tabs::-webkit-scrollbar,
+  .admin-log-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .admin-tab {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .admin-sticky-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-cmd-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .admin-modal {
+    width: calc(100vw - 24px) !important;
+  }
+
+  .form-row.form-row-stack {
+    gap: 8px;
+  }
+
+  .form-input-narrow {
+    width: 100%;
+  }
+
+  .admin-pagination {
+    flex-wrap: wrap;
+  }
+
+  .vk-link-row {
+    flex-direction: column;
+  }
+
+  .vk-link-row .icon-button {
+    align-self: flex-end;
+  }
+
+  .page-shell {
+    padding-left: 16px;
+    padding-right: 16px;
+    padding-bottom: 32px;
+  }
+
+  .surface-card {
+    padding: 18px 16px;
+    border-radius: 22px;
+  }
+
+  .section-head,
+  .release-topline {
+    flex-direction: column;
+  }
+
+  .preview-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .preview-row-value {
+    width: 100%;
+    text-align: left;
+  }
+}
+
+/* =========================================================================
+   KEYFRAMES
+   ========================================================================= */
+
+@keyframes oneui-loader-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes samsung-loader-rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes samsung-loader-scatter-tl {
+  0%,
+  100% {
+    transform: translate(-3.5px, -3.5px);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate(-8px, -8px);
+    opacity: 1;
+  }
+}
+
+@keyframes samsung-loader-scatter-tr {
+  0%,
+  100% {
+    transform: translate(3.5px, -3.5px);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate(8px, -8px);
+    opacity: 1;
+  }
+}
+
+@keyframes samsung-loader-scatter-br {
+  0%,
+  100% {
+    transform: translate(3.5px, 3.5px);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate(8px, 8px);
+    opacity: 1;
+  }
+}
+
+@keyframes samsung-loader-scatter-bl {
+  0%,
+  100% {
+    transform: translate(-3.5px, 3.5px);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate(-8px, 8px);
+    opacity: 1;
+  }
+}
+
+/* Big landing-page loader (11.25px dots, ~14px reach). */
+@keyframes samsung-loader-big-tl {
+  0%,
+  100% {
+    transform: translate(-7px, -7px);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate(-15px, -15px);
+    opacity: 1;
+  }
+}
+@keyframes samsung-loader-big-tr {
+  0%,
+  100% {
+    transform: translate(7px, -7px);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate(15px, -15px);
+    opacity: 1;
+  }
+}
+@keyframes samsung-loader-big-br {
+  0%,
+  100% {
+    transform: translate(7px, 7px);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate(15px, 15px);
+    opacity: 1;
+  }
+}
+@keyframes samsung-loader-big-bl {
+  0%,
+  100% {
+    transform: translate(-7px, 7px);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate(-15px, 15px);
+    opacity: 1;
+  }
+}
+
+/* =========================================================================
+   PRESERVED FROM PRE-REDESIGN — Xray profiles, theme switcher, subscription
+   card, light-theme palette dialed in earlier sessions.
+   ========================================================================= */
+@layer components {
+  .admin-profile-row {
+    @apply grid items-center gap-3;
+    grid-template-columns: 1fr auto auto;
+  }
+
+  .admin-profile-text {
+    @apply flex min-w-0 flex-col gap-0.5;
+  }
+
+  .admin-profile-group-header {
+    @apply mt-4 flex items-center justify-between gap-3;
+  }
+
+  .subscription-card {
+    @apply mt-0;
+  }
+
+  .admin-theme-switch {
+    @apply mt-2 flex items-center gap-3;
+  }
+
+  .admin-theme-options {
+    @apply grid grid-cols-2 gap-1 rounded-2xl bg-white/5 p-1;
+  }
+
+  .admin-theme-option {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-1.5 text-[12px] text-wings-text/70 transition-colors;
+  }
+
+  .admin-theme-option:hover {
+    @apply text-wings-text;
+  }
+
+  .admin-theme-option.is-active {
+    @apply bg-white/10 text-wings-text;
+  }
+
+  /* =====================================================================
+     BENTO GRID — Dashboard hero. 3 columns; profile spans 2 rows;
+     security/services span 2 columns. Matches the design handoff
+     prototype 1:1.
+     ===================================================================== */
+
+  .bento {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: minmax(170px, auto);
+    margin-top: 24px;
+  }
+
+  @media (max-width: 1100px) {
+    .bento {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 720px) {
+    .bento {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .bento-card {
+    @apply text-wings-text;
+    background: theme('colors.wings.card');
+    border: 1px solid theme('colors.wings.border');
+    border-radius: 26px;
+    padding: 22px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .bento-profile {
+    grid-row: span 2;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 32px 24px;
+  }
+
+  .bento-security,
+  .bento-services {
+    grid-column: span 2;
+  }
+
+  @media (max-width: 1100px) {
+    .bento-security,
+    .bento-services {
+      grid-column: auto;
+    }
+  }
+
+  .bento-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .bento-title-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .bento-card-title {
+    @apply font-sharp font-bold uppercase tracking-[0.14em] text-wings-text;
+    font-size: 14px;
+  }
+
+  .bento-kicker {
+    @apply font-sharp font-bold uppercase tracking-[0.14em] text-wings-text;
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+
+  .bento-text {
+    color: theme('colors.wings.muted');
+    line-height: 1.55;
+    margin: 0;
+    font-size: 14px;
+  }
+
+  .bento-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    flex: none;
+  }
+
+  .bento-icon-img {
+    background: transparent !important;
+    padding: 4px;
+    width: 56px;
+    height: 56px;
+  }
+
+  .bento-icon-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    transform: scale(0.78);
+    transform-origin: center;
+  }
+
+  /* Profile avatar (110px round, hover-reveal camera). */
+  .profile-avatar {
+    position: relative;
+    width: 110px;
+    height: 110px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: visible;
+  }
+
+  .profile-avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 9999px;
+    object-fit: cover;
+    background: #fff;
+    display: block;
+  }
+
+  .profile-avatar-edit {
+    position: absolute;
+    right: 2px;
+    bottom: 2px;
+    width: 36px;
+    height: 36px;
+    border-radius: 9999px;
+    border: 3px solid theme('colors.wings.card');
+    background: theme('colors.wings.accent');
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    appearance: none;
+    padding: 0;
+    opacity: 0;
+    transform: translateY(4px) scale(0.9);
+    transition:
+      opacity 180ms ease,
+      transform 180ms ease,
+      background 150ms;
+  }
+
+  .profile-avatar-edit:hover {
+    background: theme('colors.wings.accentHover');
+  }
+
+  .profile-avatar:hover .profile-avatar-edit,
+  .profile-avatar:focus-within .profile-avatar-edit {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  @media (hover: none) {
+    .profile-avatar-edit {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .profile-dot {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 9999px;
+    background: #6fe3a4;
+    border: 3px solid theme('colors.wings.card');
+  }
+
+  .profile-name {
+    @apply font-sharp font-bold;
+    font-size: 24px;
+    letter-spacing: -0.005em;
+  }
+
+  .profile-handle {
+    color: theme('colors.wings.muted');
+    font-size: 14px;
+  }
+
+  /* Devices/clients stat. */
+  .devices-numbers {
+    display: flex;
+    gap: 32px;
+    align-items: flex-end;
+    margin-top: 12px;
+  }
+
+  .devices-number {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .devices-number-value {
+    @apply font-sharp font-bold text-wings-text;
+    font-size: 40px;
+    line-height: 1;
+    letter-spacing: -0.01em;
+  }
+
+  .devices-number-label {
+    color: theme('colors.wings.muted');
+    font-size: 12px;
+    margin-top: 6px;
+  }
+
+  /* =====================================================================
+     OWNER CONSOLE — red role pill, stats grid, key/value health table.
+     ===================================================================== */
+
+  .owner-role-pill {
+    @apply inline-flex items-center gap-2 rounded-full bg-red-400/15 px-3 py-1.5 font-sharp text-[11px] font-bold uppercase tracking-[0.14em];
+    color: #ffb0bf;
+  }
+
+  .owner-role-pill-dot {
+    @apply h-2 w-2 rounded-full;
+    background: #ff6680;
+    box-shadow: 0 0 0 4px rgba(255, 102, 128, 0.18);
+  }
+
+  .admin-stats {
+    @apply mt-4 grid gap-3;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+
+  .stat {
+    @apply flex flex-col gap-1 rounded-[20px] border border-wings-border bg-wings-surface p-4;
+  }
+
+  .stat-kicker {
+    @apply text-[11px] font-bold uppercase tracking-[0.14em] text-wings-kicker;
+  }
+
+  .stat-value {
+    @apply font-sharp text-[28px] font-bold leading-tight text-wings-text;
+  }
+
+  .stat-meta {
+    @apply text-[12px] text-wings-muted;
+  }
+
+  .keyvals {
+    @apply mt-4 flex flex-col gap-0;
+  }
+
+  .keyvals .keyval {
+    @apply flex items-center justify-between gap-4 border-t border-wings-divider px-1 py-3 text-[14px];
+  }
+
+  .keyvals .keyval:first-child {
+    @apply border-t-0;
+  }
+
+  .keyval-label {
+    @apply text-wings-muted;
+  }
+
+  .keyval-value {
+    @apply text-right font-bold text-wings-text;
+  }
+
+  .session-row {
+    @apply flex flex-wrap items-baseline justify-between gap-3 border-t border-wings-divider px-1 py-3 text-[14px];
+  }
+
+  .session-row:first-child {
+    @apply border-t-0;
+  }
+
+  .session-row-actor {
+    @apply font-bold text-wings-text;
+  }
+
+  .session-row-meta {
+    @apply text-[12px] text-wings-muted;
+  }
+
+  /* =====================================================================
+     DANGER ZONE — destructive card / button.
+     ===================================================================== */
+
+  .danger-card {
+    @apply mt-6 rounded-[28px] p-7;
+    border: 1px solid rgba(255, 122, 140, 0.35);
+    background: rgba(255, 122, 140, 0.06);
+  }
+
+  .button-danger {
+    @apply action-button text-white;
+    background: #c84055;
+  }
+
+  .button-danger:hover {
+    background: #d44a60;
+  }
+
+  /* =====================================================================
+     SHARED FOOTER — used on landing/login/register.
+     ===================================================================== */
+
+  .public-footer {
+    @apply mx-auto flex w-full items-baseline justify-between gap-4 border-t border-wings-divider px-6 py-8 text-[12px];
+    max-width: 1680px;
+    color: rgba(252, 252, 252, 0.4);
+  }
+
+  @media (min-width: 768px) {
+    .public-footer {
+      @apply px-10;
+    }
+  }
+
+  .public-footer-mark {
+    @apply font-sharp text-[18px] font-bold tracking-[-0.01em] text-wings-text/60;
+  }
+}
+
+/* =========================================================================
+   LIGHT THEME — sky background mirroring Android first-launch.
+   Carried over from earlier dialed-in tuning.
+   ========================================================================= */
+
+html:has(body.theme-light) {
+  background: #d6e4f5;
+}
+
+body.theme-light {
+  background: transparent;
+  color: #10131a;
+}
+
+body.theme-light::before {
+  background-color: #d6e4f5;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  animation: sky-shimmer 26s ease-in-out infinite alternate;
+}
+
+@keyframes sky-shimmer {
+  0% {
+    transform: translate3d(-1.2%, -0.8%, 0) scale(1);
+    filter: saturate(1.02) brightness(1) hue-rotate(0deg);
+  }
+  50% {
+    transform: translate3d(0.9%, 1%, 0) scale(1.025);
+    filter: saturate(1.08) brightness(1.04) hue-rotate(4deg);
+  }
+  100% {
+    transform: translate3d(1.5%, -0.8%, 0) scale(1.04);
+    filter: saturate(1.04) brightness(1.02) hue-rotate(-3deg);
+  }
+}
+
+body.theme-light .admin-shell,
+body.theme-light .page-shell,
+body.theme-light .login-stage,
+body.theme-light .landing-stage {
+  color: #10131a;
+}
+
+body.theme-light .surface-card,
+body.theme-light .bento {
+  background: rgba(255, 255, 255, 0.42);
+  backdrop-filter: blur(22px) saturate(1.15);
+  -webkit-backdrop-filter: blur(22px) saturate(1.15);
+  border-color: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 18px 50px rgba(20, 30, 60, 0.14);
+  color: #10131a;
+}
+
+body.theme-light .admin-card-title,
+body.theme-light .admin-section-subtitle,
+body.theme-light .form-section-title,
+body.theme-light .hero-title,
+body.theme-light .body-copy,
+body.theme-light .bento-title,
+body.theme-light .bento-stat,
+body.theme-light .stat-value,
+body.theme-light strong {
+  color: #10131a;
+}
+
+body.theme-light .admin-muted,
+body.theme-light .form-label,
+body.theme-light .field-label,
+body.theme-light .bento-kicker,
+body.theme-light .stat-kicker,
+body.theme-light .keyval-label,
+body.theme-light .session-row-meta,
+body.theme-light .admin-table th {
+  color: #646d7c;
+}
+
+body.theme-light .text-input,
+body.theme-light .link-input {
+  color: #10131a;
+  border-bottom-color: rgba(16, 19, 26, 0.22);
+}
+
+body.theme-light .text-input:focus,
+body.theme-light .link-input:focus {
+  border-bottom-color: #1259d1;
+}
+
+body.theme-light .text-input::placeholder,
+body.theme-light .link-input::placeholder {
+  color: rgba(16, 19, 26, 0.45);
+}
+
+body.theme-light .form-section,
+body.theme-light .admin-list-item,
+body.theme-light .admin-config-import,
+body.theme-light .admin-rule-card,
+body.theme-light .admin-apps-item,
+body.theme-light .surface-inset,
+body.theme-light .stat,
+body.theme-light .entry-card,
+body.theme-light .release-card {
+  background: rgba(255, 255, 255, 0.24);
+  border-color: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+body.theme-light .form-section .form-section,
+body.theme-light .admin-list-item .form-section {
+  background: rgba(255, 255, 255, 0.32);
+  border-color: rgba(16, 19, 26, 0.05);
+}
+
+body.theme-light .admin-list-item.is-selected {
+  background: rgba(18, 89, 209, 0.18);
+  border-color: rgba(18, 89, 209, 0.5);
+}
+
+body.theme-light .admin-mono {
+  background: rgba(16, 19, 26, 0.06);
+  color: #10131a;
+}
+
+body.theme-light .admin-banner {
+  background: rgba(242, 169, 59, 0.18);
+  border-color: rgba(242, 169, 59, 0.45);
+  color: #5d4304;
+}
+
+body.theme-light .admin-banner a {
+  color: #5d4304;
+}
+
+body.theme-light .admin-row:hover {
+  background: rgba(18, 89, 209, 0.06);
+}
+
+body.theme-light .admin-table td {
+  border-color: rgba(16, 19, 26, 0.06);
+}
+
+body.theme-light .admin-tabs,
+body.theme-light .admin-log-tabs,
+body.theme-light .admin-titlebar {
+  border-color: rgba(16, 19, 26, 0.08);
+}
+
+body.theme-light .admin-tab,
+body.theme-light .admin-nav-link {
+  color: rgba(16, 19, 26, 0.65);
+}
+
+body.theme-light .admin-tab:hover,
+body.theme-light .admin-nav-link:hover {
+  color: #10131a;
+}
+
+body.theme-light .admin-tab.is-active,
+body.theme-light .admin-nav-link.is-active {
+  color: #10131a;
+  border-bottom-color: #1259d1;
+}
+
+body.theme-light .admin-pill.is-online {
+  background: rgba(22, 150, 90, 0.16);
+  color: #0f6b3a;
+}
+
+body.theme-light .admin-pill.is-offline {
+  background: rgba(16, 19, 26, 0.08);
+  color: rgba(16, 19, 26, 0.55);
+}
+
+body.theme-light .admin-pill.is-info {
+  background: rgba(18, 89, 209, 0.14);
+  color: #1259d1;
+}
+
+body.theme-light .admin-pill-button {
+  background: rgba(255, 255, 255, 0.55);
+  border-color: rgba(255, 255, 255, 0.55);
+  color: rgba(16, 19, 26, 0.75);
+}
+
+body.theme-light .admin-pill-button:hover {
+  background: rgba(18, 89, 209, 0.06);
+  color: #10131a;
+}
+
+body.theme-light .admin-pill-button.is-active {
+  background: rgba(18, 89, 209, 0.12);
+  border-color: rgba(18, 89, 209, 0.32);
+  color: #0a4cff;
+}
+
+body.theme-light .admin-pill-count {
+  background: rgba(16, 19, 26, 0.06);
+  color: #10131a;
+}
+
+body.theme-light .icon-button {
+  background: rgba(16, 19, 26, 0.04);
+  border-color: rgba(16, 19, 26, 0.08);
+  color: #10131a;
+}
+
+body.theme-light .icon-button:hover {
+  background: rgba(16, 19, 26, 0.08);
+}
+
+body.theme-light .button-secondary,
+body.theme-light .button-ghost {
+  background: rgba(16, 19, 26, 0.06);
+  color: #10131a;
+}
+
+body.theme-light .button-secondary:hover,
+body.theme-light .button-ghost:hover {
+  background: rgba(16, 19, 26, 0.1);
+}
+
+body.theme-light .button-primary {
+  background: linear-gradient(180deg, #4ea0ff 0%, #1259d1 100%);
+  color: #ffffff;
+}
+
+body.theme-light .admin-brand-tag,
+body.theme-light .admin-brand-divider {
+  color: #646d7c;
+}
+
+body.theme-light .admin-modal-backdrop {
+  background: rgba(20, 30, 60, 0.45);
+}
+
+body.theme-light .admin-sticky-bar {
+  background: rgba(255, 255, 255, 0.32);
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+body.theme-light .admin-theme-options {
+  background: rgba(16, 19, 26, 0.05);
+}
+
+body.theme-light .admin-theme-option {
+  color: rgba(16, 19, 26, 0.7);
+}
+
+body.theme-light .admin-theme-option:hover {
+  color: #10131a;
+}
+
+body.theme-light .admin-theme-option.is-active {
+  background: #ffffff;
+  color: #0a4cff;
+  box-shadow: 0 1px 3px rgba(20, 30, 60, 0.08);
+}
+
+body.theme-light .admin-error,
+body.theme-light .state-error {
+  color: #d13a4b;
+}
+
+body.theme-light .admin-success {
+  color: #0f6b3a;
+}
+
+body.theme-light .admin-success-box {
+  background: rgba(22, 150, 90, 0.12);
+  border-color: rgba(22, 150, 90, 0.4);
+  color: #0f4525;
+}
+
+body.theme-light pre.admin-code,
+body.theme-light pre.admin-log-pane {
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #10131a;
+}
+
+body.theme-light .oneui-switch-track {
+  background: rgba(16, 19, 26, 0.18);
+}
+
+body.theme-light .oneui-switch-input:checked + .oneui-switch-track {
+  background: linear-gradient(140deg, #1769ff, #1259d1);
+}
+
+body.theme-light .oneui-switch-thumb {
+  box-shadow: 0 1px 3px rgba(20, 30, 60, 0.25);
+}

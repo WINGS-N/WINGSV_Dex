@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=WINGS V Dex
+Comment=WINGS V desktop client (VK TURN)
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/wingsv_dex %u
+Terminal=false
+Type=Application
+Icon=wingsv_dex
+Categories=Utility;
+StartupWMClass=wingsv_dex
+
+ 

@@ -1,0 +1,147 @@
+name: release
+
+# Builds the full feasible matrix and publishes a GitHub Release on a v* tag.
+#
+# GUI feasibility (the vkturn child builds for every target; the Wails GUI does not):
+#   linux/amd64  - native
+#   linux/arm64  - native arm64 runner (WebKitGTK is cgo, no cross-toolchain here)
+#   windows/amd64, windows/arm64 - cross-compiled on Linux (Wails uses purego, no cgo)
+#   x86 (386) is intentionally omitted: Wails v3 is not 32-bit clean, and no distro ships
+#   a 32-bit libwebkitgtk-6.0 - so a 32-bit GUI cannot be built.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  WINTUN_VERSION: '0.14.1'
+
+jobs:
+  linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            goarch: amd64
+            aiarch: x86_64
+            runner: ubuntu-24.04
+          - arch: arm64
+            goarch: arm64
+            aiarch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm, cache-dependency-path: frontend/pnpm-lock.yaml }
+      - name: GUI toolchain + packagers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev nsis
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+      - name: Install wails3
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.113
+      - name: Frontend
+        run: |
+          pnpm --dir frontend install --frozen-lockfile
+          wails3 generate bindings -clean=true -time-type=Date
+          pnpm --dir frontend build
+      - name: Build binaries
+        run: |
+          mkdir -p bin
+          (cd external/vk-turn-proxy && CGO_ENABLED=0 GOARCH=${{ matrix.goarch }} go build -trimpath -ldflags="-s -w" -o "$GITHUB_WORKSPACE/bin/vkturn" ./client)
+          CGO_ENABLED=1 GOARCH=${{ matrix.goarch }} go build -trimpath -ldflags="-s -w" -o bin/wingsv-dex .
+      - name: Version
+        id: v
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Package (deb + AppImage + tar)
+        env:
+          VERSION: ${{ steps.v.outputs.version || '0.0.0' }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          mkdir -p dist
+          nfpm pkg -p deb -f build/linux/nfpm.yaml -t "dist/wingsv-dex_${VERSION:-0.0.0}_${{ matrix.arch }}.deb"
+          build/linux/appimage/build-appimage.sh ${{ matrix.aiarch }} bin dist
+          tar -C bin -czf "dist/wingsv-dex-linux-${{ matrix.arch }}.tar.gz" wingsv-dex vkturn
+      - uses: actions/upload-artifact@v4
+        with: { name: linux-${{ matrix.arch }}, path: dist/* }
+
+  # One job builds both arches (cross-compile is cheap, no cgo) so a single universal
+  # installer can embed both payloads.
+  windows:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm, cache-dependency-path: frontend/pnpm-lock.yaml }
+      - name: Tooling
+        run: |
+          sudo apt-get update && sudo apt-get install -y nsis
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.113
+          go install github.com/tc-hib/go-winres@latest
+      - name: Frontend
+        run: |
+          pnpm --dir frontend install --frozen-lockfile
+          wails3 generate bindings -clean=true -time-type=Date
+          pnpm --dir frontend build
+      - name: Fetch wintun (both arches)
+        run: |
+          curl -fsSL "https://www.wintun.net/builds/wintun-${WINTUN_VERSION}.zip" -o wintun.zip
+          unzip -q wintun.zip
+      # Embed the WINGS V icon + manifest + version into the exe (go build auto-links the
+      # rsrc_windows_<arch>.syso; these are generated here rather than committed).
+      - name: Embed exe icon
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"; [ -n "$VERSION" ] || VERSION="0.0.0"
+          go-winres simply --arch amd64,arm64 --icon build/appicon.png --manifest gui \
+            --product-name "WINGS V" --file-description "WINGS V" \
+            --product-version "$VERSION" --file-version "$VERSION"
+      - name: Build payloads (amd64 + arm64)
+        run: |
+          for arch in amd64 arm64; do
+            out="dist/windows-$arch"; mkdir -p "$out"
+            (cd external/vk-turn-proxy && CGO_ENABLED=0 GOOS=windows GOARCH=$arch go build -trimpath -ldflags="-s -w" -o "$GITHUB_WORKSPACE/$out/vkturn.exe" ./client)
+            CGO_ENABLED=0 GOOS=windows GOARCH=$arch go build -trimpath -ldflags="-s -w" -o "$out/wingsv-dex.exe" .
+            cp "wintun/bin/$arch/wintun.dll" "$out/wintun.dll"
+            (cd "$out" && zip -r "$GITHUB_WORKSPACE/dist/wingsv-dex-windows-$arch.zip" .)
+          done
+      - name: Universal installer
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"; [ -n "$VERSION" ] || VERSION="0.0.0"
+          makensis -DVERSION="$VERSION" \
+            -DSRCDIR_AMD64="$GITHUB_WORKSPACE/dist/windows-amd64" \
+            -DSRCDIR_ARM64="$GITHUB_WORKSPACE/dist/windows-arm64" \
+            build/windows/installer.nsi
+          mv build/windows/wingsv-dex-setup.exe dist/wingsv-dex-setup.exe
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: |
+            dist/wingsv-dex-windows-amd64.zip
+            dist/wingsv-dex-windows-arm64.zip
+            dist/wingsv-dex-setup.exe }
+
+  release:
+    needs: [linux, windows]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*

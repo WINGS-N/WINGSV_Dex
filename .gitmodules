@@ -1,0 +1,4 @@
+[submodule "external/vk-turn-proxy"]
+	path = external/vk-turn-proxy
+	url = https://github.com/WINGS-N/vk-turn-proxy.git
+	branch = main

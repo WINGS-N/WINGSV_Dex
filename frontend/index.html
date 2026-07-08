@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>WINGS V</title>
+    <style>
+      /* overflow: clip (not hidden) so the shell can never be scrolled - focusing a
+         control must not scroll a non-scrolling ancestor and shove the fixed-height
+         layout off-screen (WebKitGTK focus-into-view bug). */
+      html {
+        margin: 0;
+        height: 100%;
+        overflow: clip;
+        background: #000000;
+      }
+
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: clip;
+        background: transparent;
+      }
+
+      #app {
+        height: 100%;
+        overflow: clip;
+      }
+
+      #boot-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+          radial-gradient(circle at 18% 24%, rgba(64, 104, 255, 0.24), transparent 30%),
+          radial-gradient(circle at 82% 18%, rgba(79, 131, 255, 0.18), transparent 28%),
+          radial-gradient(circle at 74% 82%, rgba(74, 191, 255, 0.14), transparent 26%),
+          radial-gradient(circle at 20% 78%, rgba(67, 149, 255, 0.16), transparent 28%),
+          #060709;
+        transition:
+          opacity 220ms ease,
+          visibility 220ms ease;
+      }
+
+      #boot-loader.is-hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .boot-loader-spinner {
+        position: relative;
+        width: 11.25px;
+        height: 11.25px;
+        flex-shrink: 0;
+        animation: samsung-loader-rotate 1.4s linear infinite;
+      }
+
+      .boot-loader-dot {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 11.25px;
+        height: 11.25px;
+        border-radius: 999px;
+        will-change: transform;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+      }
+
+      .boot-loader-dot-top {
+        background: rgb(55, 129, 246);
+        animation: boot-loader-tl 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+      }
+
+      .boot-loader-dot-right {
+        background: rgb(97, 210, 153);
+        animation: boot-loader-tr 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+      }
+
+      .boot-loader-dot-bottom {
+        background: rgb(55, 129, 246);
+        animation: boot-loader-br 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+      }
+
+      .boot-loader-dot-left {
+        background: rgb(55, 129, 246);
+        animation: boot-loader-bl 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+      }
+
+      @keyframes samsung-loader-rotate {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      @keyframes boot-loader-tl {
+        0%,
+        100% {
+          transform: translate(-7px, -7px);
+          opacity: 0.9;
+        }
+        50% {
+          transform: translate(-15px, -15px);
+          opacity: 1;
+        }
+      }
+
+      @keyframes boot-loader-tr {
+        0%,
+        100% {
+          transform: translate(7px, -7px);
+          opacity: 0.9;
+        }
+        50% {
+          transform: translate(15px, -15px);
+          opacity: 1;
+        }
+      }
+
+      @keyframes boot-loader-br {
+        0%,
+        100% {
+          transform: translate(7px, 7px);
+          opacity: 0.9;
+        }
+        50% {
+          transform: translate(15px, 15px);
+          opacity: 1;
+        }
+      }
+
+      @keyframes boot-loader-bl {
+        0%,
+        100% {
+          transform: translate(-7px, 7px);
+          opacity: 0.9;
+        }
+        50% {
+          transform: translate(-15px, 15px);
+          opacity: 1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="boot-loader" aria-hidden="true">
+      <div class="boot-loader-spinner">
+        <div class="boot-loader-dot boot-loader-dot-top"></div>
+        <div class="boot-loader-dot boot-loader-dot-right"></div>
+        <div class="boot-loader-dot boot-loader-dot-bottom"></div>
+        <div class="boot-loader-dot boot-loader-dot-left"></div>
+      </div>
+    </div>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
