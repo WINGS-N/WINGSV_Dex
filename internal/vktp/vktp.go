@@ -188,6 +188,36 @@ func (m *Manager) Telemetry(ctx context.Context, onCount func(int64)) error {
 	}
 }
 
+// StreamUnderlayIPs streams the relay's underlay destination IPs (the VK TURN and peer
+// servers it pins to the physical interface on Windows) to onIP until ctx is cancelled or
+// the stream ends. The host installs a physical-gateway /32 bypass route for each so the
+// underlay stays off the full tunnel. On Linux the relay never reports any (fwmark bypass),
+// so onIP is simply never called.
+func (m *Manager) StreamUnderlayIPs(ctx context.Context, onIP func(string)) error {
+	m.mu.Lock()
+	client := m.client
+	m.mu.Unlock()
+	if client == nil {
+		return errors.New("vktp: not running")
+	}
+	stream, err := client.StreamUnderlayIPs(ctx, &appcontrolpb.StreamUnderlayIPsRequest{})
+	if err != nil {
+		return err
+	}
+	for {
+		msg, err := stream.Recv()
+		if err != nil {
+			if errors.Is(err, io.EOF) || ctx.Err() != nil {
+				return nil
+			}
+			return err
+		}
+		if ip := msg.GetIp(); ip != "" {
+			onIP(ip)
+		}
+	}
+}
+
 // SetVKCookies pushes the captured VK web-session cookies and User-Agent to the
 // running relay, which mints the privileged TURN token from them (account mode).
 func (m *Manager) SetVKCookies(cookies, userAgent string) error {

@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/Microsoft/go-winio"
 
@@ -40,6 +41,7 @@ type command struct {
 	AppMark       int       `json:"appMark"`
 	Whitelist     bool      `json:"whitelist"`
 	SelfPid       int       `json:"selfPid"`
+	IP            string    `json:"ip"`
 }
 
 type reply struct {
@@ -49,9 +51,34 @@ type reply struct {
 
 // Run connects to the GUI's control pipe (name from --pipe) and serves the data-plane
 // control loop, tearing everything down on stop or when the pipe closes.
+// openHelperLog opens the net-helper log file under LocalAppData (falling back to the temp
+// dir), truncating any previous run.
+func openHelperLog() *os.File {
+	dir := os.Getenv("LOCALAPPDATA")
+	if dir == "" {
+		dir = os.TempDir()
+	} else {
+		dir = filepath.Join(dir, "WINGS V")
+		_ = os.MkdirAll(dir, 0o755)
+	}
+	f, err := os.OpenFile(filepath.Join(dir, "nethelper.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return nil
+	}
+	return f
+}
+
 func Run() error {
 	log.SetPrefix("net-helper: ")
 	log.SetFlags(log.Ltime)
+	// This helper runs elevated and window-hidden, so its stdio is not visible to the GUI's
+	// console. Send all logs - including wireguard-go's, which writes to os.Stdout - to a
+	// file so the tunnel/data-plane diagnostics can be inspected.
+	if f := openHelperLog(); f != nil {
+		os.Stdout = f
+		os.Stderr = f
+		log.SetOutput(f)
+	}
 
 	pipeName := pipeArg()
 	if pipeName == "" {
@@ -109,6 +136,19 @@ func Run() error {
 			// sockets to the physical interface (IP_UNICAST_IF), so no WFP exclusion is
 			// needed here. vkturnPid is kept for a future per-app split-tunnel via WFP.
 			log.Printf("wgup ok: %s peer=%s endpoint=%s (vkturn pid %d)", cmd.Config.Interface, shortKey(cmd.Config.PeerPublicKey), cmd.Config.PeerEndpoint, vkturnPid)
+			_ = enc.Encode(reply{OK: true})
+		case "bypass":
+			// vkturn reported an underlay destination (VK TURN / peer server IP); pin a /32
+			// route to it out the physical gateway so it skips the full-tunnel routes.
+			if tun != nil {
+				tun.AddBypassRoute(cmd.IP)
+			}
+			_ = enc.Encode(reply{OK: true})
+		case "activate":
+			// Install the deferred full-tunnel catch-all now that the /32 bypass routes are in.
+			if tun != nil {
+				tun.Activate()
+			}
 			_ = enc.Encode(reply{OK: true})
 		case "wgdown":
 			teardown()

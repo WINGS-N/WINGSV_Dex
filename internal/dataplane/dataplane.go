@@ -53,6 +53,7 @@ type command struct {
 	AppMark       int       `json:"appMark,omitempty"`
 	Whitelist     bool      `json:"whitelist,omitempty"`
 	SelfPid       int       `json:"selfPid,omitempty"`
+	IP            string    `json:"ip,omitempty"`
 }
 
 type reply struct {
@@ -128,6 +129,30 @@ func (c *Controller) WGUp(cfg WGConfig) error {
 	}
 	cfg.FwMark = c.fwmark
 	return c.send(command{Cmd: "wgup", Config: &cfg})
+}
+
+// Bypass routes a single underlay destination IP (a VK TURN / peer server that vkturn
+// connects to) around the tunnel via the physical gateway. Windows only; on Linux the
+// underlay bypass is fwmark-based and this is a no-op the helper acknowledges. Safe to
+// call repeatedly with the same IP (idempotent in the helper).
+func (c *Controller) Bypass(ip string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.h == nil {
+		return errors.New("dataplane: not started")
+	}
+	return c.send(command{Cmd: "bypass", IP: ip})
+}
+
+// Activate installs the deferred full-tunnel catch-all routes on Windows (two-phase: after
+// the underlay bypass routes are in). No-op elsewhere - the helper acknowledges it.
+func (c *Controller) Activate() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.h == nil {
+		return errors.New("dataplane: not started")
+	}
+	return c.send(command{Cmd: "activate"})
 }
 
 // AppsUp sets up the per-app split-tunnel cgroup (marked with mark) and starts the

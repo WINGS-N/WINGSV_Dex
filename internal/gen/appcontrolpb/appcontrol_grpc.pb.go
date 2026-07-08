@@ -34,6 +34,7 @@ const (
 	AppControl_StreamEvents_FullMethodName         = "/vkturn.appcontrol.v1.AppControl/StreamEvents"
 	AppControl_SubmitVKAccountCreds_FullMethodName = "/vkturn.appcontrol.v1.AppControl/SubmitVKAccountCreds"
 	AppControl_PatchConfig_FullMethodName          = "/vkturn.appcontrol.v1.AppControl/PatchConfig"
+	AppControl_StreamUnderlayIPs_FullMethodName    = "/vkturn.appcontrol.v1.AppControl/StreamUnderlayIPs"
 )
 
 // AppControlClient is the client API for AppControl service.
@@ -72,6 +73,13 @@ type AppControlClient interface {
 	// one at a time, traffic is not interrupted) and reports per-field progress over
 	// StreamEvents as PatchStatusEvent messages keyed by the request_id.
 	PatchConfig(ctx context.Context, in *PatchConfigRequest, opts ...grpc.CallOption) (*PatchConfigResponse, error)
+	// StreamUnderlayIPs pushes each remote IP the relay pins to the physical interface for
+	// its own underlay (the VK TURN and peer servers it dials). On Windows the host app
+	// installs a matching /32 bypass route via the physical gateway: per-socket interface
+	// pinning alone leaves the tunnel's source address on the packet, which the upstream
+	// router drops, so the underlay must be excluded from the full tunnel by route too. The
+	// relay also logs each IP.
+	StreamUnderlayIPs(ctx context.Context, in *StreamUnderlayIPsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[UnderlayIP], error)
 }
 
 type appControlClient struct {
@@ -190,6 +198,25 @@ func (c *appControlClient) PatchConfig(ctx context.Context, in *PatchConfigReque
 	return out, nil
 }
 
+func (c *appControlClient) StreamUnderlayIPs(ctx context.Context, in *StreamUnderlayIPsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[UnderlayIP], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AppControl_ServiceDesc.Streams[2], AppControl_StreamUnderlayIPs_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[StreamUnderlayIPsRequest, UnderlayIP]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AppControl_StreamUnderlayIPsClient = grpc.ServerStreamingClient[UnderlayIP]
+
 // AppControlServer is the server API for AppControl service.
 // All implementations must embed UnimplementedAppControlServer
 // for forward compatibility.
@@ -226,6 +253,13 @@ type AppControlServer interface {
 	// one at a time, traffic is not interrupted) and reports per-field progress over
 	// StreamEvents as PatchStatusEvent messages keyed by the request_id.
 	PatchConfig(context.Context, *PatchConfigRequest) (*PatchConfigResponse, error)
+	// StreamUnderlayIPs pushes each remote IP the relay pins to the physical interface for
+	// its own underlay (the VK TURN and peer servers it dials). On Windows the host app
+	// installs a matching /32 bypass route via the physical gateway: per-socket interface
+	// pinning alone leaves the tunnel's source address on the packet, which the upstream
+	// router drops, so the underlay must be excluded from the full tunnel by route too. The
+	// relay also logs each IP.
+	StreamUnderlayIPs(*StreamUnderlayIPsRequest, grpc.ServerStreamingServer[UnderlayIP]) error
 	mustEmbedUnimplementedAppControlServer()
 }
 
@@ -262,6 +296,9 @@ func (UnimplementedAppControlServer) SubmitVKAccountCreds(context.Context, *VKAc
 }
 func (UnimplementedAppControlServer) PatchConfig(context.Context, *PatchConfigRequest) (*PatchConfigResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PatchConfig not implemented")
+}
+func (UnimplementedAppControlServer) StreamUnderlayIPs(*StreamUnderlayIPsRequest, grpc.ServerStreamingServer[UnderlayIP]) error {
+	return status.Errorf(codes.Unimplemented, "method StreamUnderlayIPs not implemented")
 }
 func (UnimplementedAppControlServer) mustEmbedUnimplementedAppControlServer() {}
 func (UnimplementedAppControlServer) testEmbeddedByValue()                    {}
@@ -432,6 +469,17 @@ func _AppControl_PatchConfig_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AppControl_StreamUnderlayIPs_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StreamUnderlayIPsRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AppControlServer).StreamUnderlayIPs(m, &grpc.GenericServerStream[StreamUnderlayIPsRequest, UnderlayIP]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AppControl_StreamUnderlayIPsServer = grpc.ServerStreamingServer[UnderlayIP]
+
 // AppControl_ServiceDesc is the grpc.ServiceDesc for AppControl service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -477,6 +525,11 @@ var AppControl_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "StreamEvents",
 			Handler:       _AppControl_StreamEvents_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "StreamUnderlayIPs",
+			Handler:       _AppControl_StreamUnderlayIPs_Handler,
 			ServerStreams: true,
 		},
 	},

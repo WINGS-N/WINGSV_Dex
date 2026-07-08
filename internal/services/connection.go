@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -241,6 +242,10 @@ func (s *ConnectionService) Connect() (ConnectionState, error) {
 			dp.Stop()
 			return s.fail(err)
 		}
+		// Windows: the relay streams the underlay IPs it pins to the physical NIC; install a
+		// /32 physical-gateway bypass route for each so vkturn's own traffic keeps a valid
+		// source and stays off the full tunnel. No-op on Linux (fwmark bypass reports none).
+		s.startUnderlayBypass(ctx, dp)
 		// Move the selected apps into the marking cgroup: bypass apps carry the same
 		// bypass mark as vkturn (direct); whitelist apps carry the tunnel mark that
 		// tunnelRule routes into the tunnel. Best-effort: a failure here does not fail
@@ -265,6 +270,68 @@ func (s *ConnectionService) Connect() (ConnectionState, error) {
 		s.startCookieRotationPoll(ctx)
 	}
 	return s.State(), nil
+}
+
+// startUnderlayBypass runs the Windows two-phase tunnel activation: WGUp brought the wintun
+// adapter up WITHOUT the full-tunnel catch-all, so here we first install a /32 physical
+// bypass route for every underlay IP the relay pins (VK TURN / peer servers), then, once
+// that initial batch settles, activate the catch-all. Installing the bypass first keeps
+// vkturn's already-established underlay sockets from being re-routed mid-flight (which
+// changes their NAT mapping and drops the TURN allocations). Later IPs add their /32 live.
+// On Linux WGUp already installed the tunnel routes, so this is a no-op.
+func (s *ConnectionService) startUnderlayBypass(ctx context.Context, dp *dataplane.Controller) {
+	if runtime.GOOS != "windows" {
+		return
+	}
+	ips := make(chan string, 64)
+	go func() {
+		_ = s.manager.StreamUnderlayIPs(ctx, func(ip string) {
+			select {
+			case ips <- ip:
+			case <-ctx.Done():
+			}
+		})
+		close(ips)
+	}()
+	go func() {
+		activated := false
+		activate := func() {
+			if activated {
+				return
+			}
+			activated = true
+			if err := dp.Activate(); err != nil {
+				log.Printf("[bypass] activate full tunnel: %v", err)
+			} else {
+				log.Printf("[bypass] full tunnel activated")
+			}
+		}
+		// Activate once the underlay-IP burst goes quiet (or after a cap if none arrive), so
+		// the catch-all lands after the bypass routes.
+		settle := time.NewTimer(3 * time.Second)
+		defer settle.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case ip, ok := <-ips:
+				if !ok {
+					activate()
+					return
+				}
+				if err := dp.Bypass(ip); err != nil {
+					log.Printf("[bypass] route %s: %v", ip, err)
+				} else {
+					log.Printf("[bypass] route %s installed", ip)
+				}
+				if !activated {
+					settle.Reset(1500 * time.Millisecond)
+				}
+			case <-settle.C:
+				activate()
+			}
+		}
+	}()
 }
 
 func (s *ConnectionService) fail(err error) (ConnectionState, error) {
