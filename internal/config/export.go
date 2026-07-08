@@ -46,6 +46,22 @@ func (p Profile) ToConfig() *wingsvpb.Config {
 	if port := parsePort(s.TurnPort); port > 0 {
 		turn.Port = proto.Uint32(port)
 	}
+	// A managed profile stores no WG of its own - the node provisions it on connect - and
+	// the provision handle (client id + token) lives on a TurnProfile, not the top-level
+	// Turn. The single-profile decode path (ProfilesFromConfig with no profiles) never reads
+	// those fields, so without this a copied managed profile re-imports as a plain, keyless
+	// profile and WGUp fails with an empty private key. Emit a one-element profile list to
+	// carry the provision handle across the share link.
+	if p.Managed {
+		turn.Profiles = []*wingsvpb.TurnProfile{{
+			Title:             p.Title,
+			VkTurnEndpoint:    p.VKTurnEndpoint,
+			TransportKind:     p.TransportKind,
+			WgProvisioned:     true,
+			ProvisionClientId: p.ProvisionClientID,
+			ProvisionToken:    base64ToBytes(p.ProvisionToken),
+		}}
+	}
 	return &wingsvpb.Config{
 		Ver:     1,
 		Type:    wingsvpb.ConfigType_CONFIG_TYPE_VK_TURN_PROFILE,
