@@ -168,6 +168,13 @@ tasks:
   generate:dotdesktop:
     summary: Generates a `.desktop` file
     dir: build
+    # Do not overwrite the curated, committed .desktop file. wails3 generate .desktop
+    # emits only a minimal entry (no GenericName/Comment/Keywords/StartupWMClass and a
+    # fixed Development category), so regenerating it on every build clobbers our
+    # hand-written WINGS V entry. Skip when the file already exists; generate only if
+    # someone removed it.
+    status:
+      - test -f {{.ROOT_DIR}}/build/linux/{{.APP_NAME}}.desktop
     cmds:
       - mkdir -p {{.ROOT_DIR}}/build/linux/appimage
       - wails3 generate .desktop -name "{{.APP_NAME}}" -exec "{{.EXEC}}" -icon "{{.ICON}}" -outputfile "{{.ROOT_DIR}}/build/linux/{{.APP_NAME}}.desktop" -categories "{{.CATEGORIES}}"
