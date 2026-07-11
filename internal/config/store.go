@@ -22,11 +22,18 @@ type Store struct {
 }
 
 type storeData struct {
-	Profiles   []Profile          `json:"profiles"`
-	ActiveID   string             `json:"activeId"`
-	SubBackend string             `json:"subBackend"` // "wg" | "awg" global mode
-	Client     ClientSettings     `json:"client"`     // device-global VK TURN params + VK-links pool
-	AppRouting AppRoutingSettings `json:"appRouting"` // per-app split-tunnel mode + lists
+	Profiles       []Profile          `json:"profiles"`
+	ActiveID       string             `json:"activeId"`
+	SubBackend     string             `json:"subBackend"`     // "wg" | "awg" global mode
+	NetworkBackend string             `json:"networkBackend"` // "vk_turn" | "xray"
+	Client         ClientSettings     `json:"client"`         // device-global VK TURN params + VK-links pool
+	AppRouting     AppRoutingSettings `json:"appRouting"`     // per-app split-tunnel mode + lists
+
+	// Xray backend state, parallel to the VK TURN profiles above.
+	XrayProfiles  []XrayProfile  `json:"xrayProfiles"`
+	XrayActiveID  string         `json:"xrayActiveId"`
+	XraySettings  XraySettings   `json:"xraySettings"`
+	Subscriptions []Subscription `json:"subscriptions"`
 }
 
 // NewStore loads the store from path, creating an empty one if the file is absent.
@@ -37,6 +44,9 @@ func NewStore(path string) (*Store, error) {
 		// Fresh store: seed the device-global defaults so bool-default fields (e.g.
 		// restart-on-network-change) start true rather than at their zero value.
 		s.data.Client = DefaultClientSettings()
+		s.data.NetworkBackend = BackendVKTurn
+		s.data.XraySettings = DefaultXraySettings()
+		s.data.XraySettings.ensureCreds()
 		return s, nil
 	}
 	if err != nil {
@@ -88,6 +98,115 @@ func (s *Store) SetSubBackend(kind string) error {
 	if !s.activeMatchesTransportLocked(kind) {
 		s.data.ActiveID = s.firstOfTransportLocked(kind)
 	}
+	return s.saveLocked()
+}
+
+// NetworkBackend returns the active network backend ("vk_turn" | "xray"), default vk_turn.
+func (s *Store) NetworkBackend() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.data.NetworkBackend == BackendXray {
+		return BackendXray
+	}
+	return BackendVKTurn
+}
+
+// SetNetworkBackend persists the active network backend.
+func (s *Store) SetNetworkBackend(kind string) error {
+	if kind != BackendXray {
+		kind = BackendVKTurn
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data.NetworkBackend = kind
+	return s.saveLocked()
+}
+
+// XrayList returns a copy of the stored Xray profiles.
+func (s *Store) XrayList() []XrayProfile {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]XrayProfile(nil), s.data.XrayProfiles...)
+}
+
+// XrayActiveID returns the id of the active Xray profile, or empty if none.
+func (s *Store) XrayActiveID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.data.XrayActiveID
+}
+
+// XrayActivate marks the Xray profile with the given id active.
+func (s *Store) XrayActivate(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, p := range s.data.XrayProfiles {
+		if p.ID == id {
+			s.data.XrayActiveID = id
+			return s.saveLocked()
+		}
+	}
+	return errors.New("unknown profile")
+}
+
+// XrayToggleFavorite flips the favorite flag of the Xray profile with the given id.
+func (s *Store) XrayToggleFavorite(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.data.XrayProfiles {
+		if s.data.XrayProfiles[i].ID == id {
+			s.data.XrayProfiles[i].Favorite = !s.data.XrayProfiles[i].Favorite
+			return s.saveLocked()
+		}
+	}
+	return errors.New("unknown profile")
+}
+
+// XrayRemove deletes the Xray profile with the given id, clearing the active pointer if
+// it pointed at the removed profile.
+func (s *Store) XrayRemove(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	kept := s.data.XrayProfiles[:0]
+	found := false
+	for _, p := range s.data.XrayProfiles {
+		if p.ID == id {
+			found = true
+			continue
+		}
+		kept = append(kept, p)
+	}
+	if !found {
+		return errors.New("unknown profile")
+	}
+	s.data.XrayProfiles = kept
+	if s.data.XrayActiveID == id {
+		s.data.XrayActiveID = ""
+	}
+	return s.saveLocked()
+}
+
+// XraySettings returns the Xray settings, backstopping scalar defaults and lazily
+// generating the local SOCKS/HTTP credentials (persisting them on first read).
+func (s *Store) XraySettings() XraySettings {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	x := s.data.XraySettings.withDefaults()
+	if x.ensureCreds() {
+		s.data.XraySettings = x
+		_ = s.saveLocked()
+	}
+	return x
+}
+
+// SetXraySettings persists the Xray settings, backstopping defaults and ensuring the
+// local proxy credentials exist when auth is enabled.
+func (s *Store) SetXraySettings(x XraySettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	x = x.withDefaults()
+	x.ensureCreds()
+	s.data.XraySettings = x
 	return s.saveLocked()
 }
 
@@ -200,6 +319,98 @@ func (s *Store) Import(link string) ([]Profile, error) {
 		return nil, err
 	}
 	return append([]Profile(nil), s.data.Profiles...), nil
+}
+
+// ImportXray adds Xray nodes from either a raw xray share link (vless://..., possibly
+// several whitespace-separated) or an Xray-backed wingsv:// link (which also carries
+// settings and subscriptions). Switches the active network backend to Xray.
+func (s *Store) ImportXray(link string) ([]XrayProfile, error) {
+	link = strings.TrimSpace(link)
+	var profiles []XrayProfile
+	var settings *XraySettings
+	var subs []Subscription
+
+	if LooksLikeXrayLink(link) {
+		for _, ln := range strings.Fields(link) {
+			if p, ok := ParseShareLink(ln); ok {
+				profiles = append(profiles, p)
+			}
+		}
+	} else {
+		cfg, err := wingsv.Decode(link)
+		if err != nil {
+			return nil, err
+		}
+		profiles = XrayProfilesFromConfig(cfg)
+		subs = SubscriptionsFromConfig(cfg)
+		if xs := cfg.GetXray().GetSettings(); xs != nil {
+			v := XraySettingsFromProto(xs)
+			settings = &v
+		}
+	}
+	if len(profiles) == 0 {
+		return nil, errors.New("link carries no Xray profile")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var firstID string
+	for i, p := range profiles {
+		id := s.upsertXrayLocked(p)
+		if i == 0 {
+			firstID = id
+		}
+	}
+	for _, sub := range subs {
+		s.upsertSubscriptionLocked(sub)
+	}
+	if settings != nil {
+		settings.ensureCreds()
+		s.data.XraySettings = settings.withDefaults()
+	}
+	if firstID != "" {
+		s.data.XrayActiveID = firstID
+	}
+	s.data.NetworkBackend = BackendXray
+	if err := s.saveLocked(); err != nil {
+		return nil, err
+	}
+	return append([]XrayProfile(nil), s.data.XrayProfiles...), nil
+}
+
+// upsertXrayLocked replaces an Xray profile sharing the same raw link (preserving id and
+// favorite), or appends a new one with a fresh id.
+func (s *Store) upsertXrayLocked(p XrayProfile) string {
+	key := p.DedupKey()
+	for i := range s.data.XrayProfiles {
+		if s.data.XrayProfiles[i].DedupKey() == key {
+			p.ID = s.data.XrayProfiles[i].ID
+			p.Favorite = s.data.XrayProfiles[i].Favorite
+			s.data.XrayProfiles[i] = p
+			return p.ID
+		}
+	}
+	p.ID = newID()
+	s.data.XrayProfiles = append(s.data.XrayProfiles, p)
+	return p.ID
+}
+
+// upsertSubscriptionLocked replaces a subscription with the same URL (preserving id), or
+// appends a new one.
+func (s *Store) upsertSubscriptionLocked(sub Subscription) string {
+	url := strings.TrimSpace(sub.URL)
+	for i := range s.data.Subscriptions {
+		if strings.TrimSpace(s.data.Subscriptions[i].URL) == url && url != "" {
+			sub.ID = s.data.Subscriptions[i].ID
+			s.data.Subscriptions[i] = sub
+			return sub.ID
+		}
+	}
+	if sub.ID == "" {
+		sub.ID = newID()
+	}
+	s.data.Subscriptions = append(s.data.Subscriptions, sub)
+	return sub.ID
 }
 
 // upsertLocked replaces a profile with the same server identity, preserving its id
