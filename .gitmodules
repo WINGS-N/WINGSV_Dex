@@ -2,3 +2,12 @@
 	path = external/vk-turn-proxy
 	url = https://github.com/WINGS-N/vk-turn-proxy.git
 	branch = main
+[submodule "external/Xray-core"]
+	path = external/Xray-core
+	url = https://github.com/WINGS-N/Xray-core.git
+[submodule "external/libXray"]
+	path = external/libXray
+	url = https://github.com/WINGS-N/libXray.git
+[submodule "external/byedpi"]
+	path = external/byedpi
+	url = https://github.com/WINGS-N/byedpi.git
