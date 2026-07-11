@@ -63,9 +63,26 @@ func NewStore(path string) (*Store, error) {
 			return nil, err
 		}
 	}
+	migrated := false
+	// A store predating the Xray backend has zero-value settings, which would show
+	// IPv6/sniffing/auth as off. RuntimeMode / ProxyIP are non-empty in the real defaults,
+	// so their emptiness marks a never-written settings block that must be seeded.
+	if s.data.XraySettings.RuntimeMode == "" {
+		s.data.XraySettings = DefaultXraySettings()
+		s.data.XraySettings.ensureCreds()
+		migrated = true
+	}
+	if s.data.ByeDPISettings.ProxyIP == "" {
+		s.data.ByeDPISettings = DefaultByeDPISettings()
+		s.data.ByeDPISettings.ensureCreds()
+		migrated = true
+	}
 	// Seed the built-in Universal subscription once, on this and older stores alike.
 	if !s.data.DefaultSubSeeded {
 		s.seedDefaultSubscriptionLocked()
+		migrated = true
+	}
+	if migrated {
 		_ = s.saveLocked()
 	}
 	return s, nil
