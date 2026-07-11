@@ -27,6 +27,12 @@ type command struct {
 	AppMark       int        `json:"appMark"`   // fwmark for the apps cgroup (bypass or tunnel)
 	Whitelist     bool       `json:"whitelist"` // whitelist mode: swap the tunnel routing rule live
 	SelfPid       int        `json:"selfPid"`   // the app's own pid: tunneled too in whitelist mode
+
+	XrayBin    string `json:"xrayBin"`    // path to bin/xray for the xray backend
+	XrayConfig string `json:"xrayConfig"` // full xray config json
+	TunName    string `json:"tunName"`    // tun device name xray creates
+	DatDir     string `json:"datDir"`     // geo asset directory (may be empty)
+	EnableIPv6 bool   `json:"enableIpv6"`
 }
 
 type reply struct {
@@ -49,6 +55,7 @@ func Run() error {
 	var active *wg.Config
 	var appsCg *wg.CgroupMark
 	var matcher *wg.AppMatcher
+	var xray *xrayChild
 	appsDown := func() {
 		if matcher != nil {
 			matcher.Stop()
@@ -62,6 +69,10 @@ func Run() error {
 	}
 	teardown := func() {
 		appsDown()
+		if xray != nil {
+			xray.stop()
+			xray = nil
+		}
 		if active != nil {
 			_ = wg.Down(*active)
 			active = nil
@@ -181,6 +192,26 @@ func Run() error {
 			_ = enc.Encode(reply{OK: true})
 		case "appsdown":
 			appsDown()
+			_ = enc.Encode(reply{OK: true})
+		case "xrayup":
+			if xray != nil {
+				xray.stop()
+				xray = nil
+			}
+			x, err := startXray(cmd.XrayBin, cmd.XrayConfig, cmd.TunName, cmd.DatDir, cmd.EnableIPv6)
+			if err != nil {
+				log.Printf("xrayup failed: %v", err)
+				_ = enc.Encode(reply{Error: err.Error()})
+				continue
+			}
+			xray = x
+			log.Printf("xrayup ok: bin=%s tun=%s pid=%d", cmd.XrayBin, cmd.TunName, x.cmd.Process.Pid)
+			_ = enc.Encode(reply{OK: true})
+		case "xraydown":
+			if xray != nil {
+				xray.stop()
+				xray = nil
+			}
 			_ = enc.Encode(reply{OK: true})
 		case "stop":
 			return nil

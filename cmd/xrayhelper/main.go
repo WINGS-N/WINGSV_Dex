@@ -76,9 +76,13 @@ func cmdRun(argv []string) error {
 	if err := xray.RunXray(cfg.DatDir, cfg.ConfigPath); err != nil {
 		return err
 	}
-	if err := initIpRoute(cfg.TunName, cfg.TunPriority, cfg.EnableIPv6); err != nil {
-		_ = xray.StopXray()
-		return err
+	// Proxy-only runs (no tun inbound) leave TunName empty: there is no device to address
+	// or route, and the process can stay unprivileged.
+	if cfg.TunName != "" {
+		if err := initIpRoute(cfg.TunName, cfg.TunPriority, cfg.EnableIPv6); err != nil {
+			_ = xray.StopXray()
+			return err
+		}
 	}
 	// The config load allocates a lot of transient garbage; hand it back to the OS.
 	runtime.GC()

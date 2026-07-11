@@ -55,6 +55,14 @@ type command struct {
 	Whitelist     bool      `json:"whitelist,omitempty"`
 	SelfPid       int       `json:"selfPid,omitempty"`
 	IP            string    `json:"ip,omitempty"`
+
+	// Xray backend: the helper spawns bin/xray run (which creates the TUN + routes) with
+	// this config, since xray-core owns the TUN and needs CAP_NET_ADMIN.
+	XrayBin    string `json:"xrayBin,omitempty"`
+	XrayConfig string `json:"xrayConfig,omitempty"`
+	TunName    string `json:"tunName,omitempty"`
+	DatDir     string `json:"datDir,omitempty"`
+	EnableIPv6 bool   `json:"enableIpv6,omitempty"`
 }
 
 type reply struct {
@@ -210,6 +218,36 @@ func (c *Controller) AppsDown() error {
 		return nil
 	}
 	return c.send(command{Cmd: "appsdown"})
+}
+
+// XrayUp has the helper spawn bin/xray run with the given config, bringing up the TUN and
+// its routes. tunName must match the tun inbound name in the config; datDir is the geo
+// asset directory (may be empty when no geosite/geoip rules are used).
+func (c *Controller) XrayUp(xrayBin, configJSON, tunName, datDir string, enableIPv6 bool) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.h == nil {
+		return errors.New("dataplane: not started")
+	}
+	logLine(c.logw, "dataplane: sending xrayup tun=%s ipv6=%v config_bytes=%d", tunName, enableIPv6, len(configJSON))
+	return c.send(command{
+		Cmd:        "xrayup",
+		XrayBin:    xrayBin,
+		XrayConfig: configJSON,
+		TunName:    tunName,
+		DatDir:     datDir,
+		EnableIPv6: enableIPv6,
+	})
+}
+
+// XrayDown stops the xray child, tearing its TUN (and thus its routes) down.
+func (c *Controller) XrayDown() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.h == nil {
+		return nil
+	}
+	return c.send(command{Cmd: "xraydown"})
 }
 
 // Stop tears the interface down and terminates the helper.

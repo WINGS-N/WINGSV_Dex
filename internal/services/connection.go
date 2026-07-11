@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -21,6 +22,7 @@ import (
 	"github.com/WINGS-N/wingsv-dex/internal/dataplane"
 	"github.com/WINGS-N/wingsv-dex/internal/gen/appcontrolpb"
 	"github.com/WINGS-N/wingsv-dex/internal/vktp"
+	"github.com/WINGS-N/wingsv-dex/internal/xray"
 )
 
 // ProtectSocket is the abstract unix socket name the privileged helper hosts and
@@ -107,6 +109,7 @@ type ConnectionService struct {
 	state          ConnectionState
 	telCancel      context.CancelFunc
 	dp             *dataplane.Controller
+	xrayProc       *xray.LocalProcess // proxy-only xray child (vpn mode runs via the helper)
 	ipInfo         IPInfo
 	vkAuthInFlight bool
 
@@ -156,8 +159,12 @@ func (s *ConnectionService) State() ConnectionState {
 	return s.state
 }
 
-// Connect starts vkturn for the active profile and begins streaming telemetry.
+// Connect starts the active backend: the Xray path when the network backend is Xray,
+// otherwise vkturn + WireGuard.
 func (s *ConnectionService) Connect() (ConnectionState, error) {
+	if s.store.NetworkBackend() == config.BackendXray {
+		return s.connectXray()
+	}
 	profile, ok := s.activeProfile()
 	if !ok {
 		return s.State(), errors.New("no active profile")
@@ -572,10 +579,15 @@ func (s *ConnectionService) Disconnect() ConnectionState {
 	}
 	dp := s.dp
 	s.dp = nil
+	xp := s.xrayProc
+	s.xrayProc = nil
 	s.mu.Unlock()
 
 	s.setState(ConnectionState{Status: StatusStopping})
 	s.manager.Stop()
+	if xp != nil {
+		xp.Stop()
+	}
 	if dp != nil {
 		dp.Stop()
 	}
@@ -591,6 +603,103 @@ func (s *ConnectionService) Disconnect() ConnectionState {
 	// real address instead of staying blank on the old tunnel IP.
 	go func() { _, _ = s.RefreshIPInfo() }()
 	return s.State()
+}
+
+// connectXray brings up the Xray backend: it builds the config from the active node and
+// settings, then either spawns xray locally (proxy-only, unprivileged) or has the elevated
+// helper spawn it to own the TUN (vpn mode). There is no telemetry stream, so the state
+// goes straight to connected once xray is up.
+func (s *ConnectionService) connectXray() (ConnectionState, error) {
+	profile, ok := s.xrayActiveProfile()
+	if !ok {
+		return s.State(), errors.New("no active xray profile")
+	}
+	settings := s.store.XraySettings()
+	s.runtimeLogf("xray connect requested title=%q runtime=%s", profile.Title, settings.RuntimeMode)
+	s.setState(ConnectionState{
+		Status:   StatusConnecting,
+		Stage:    StageTurn,
+		Endpoint: profile.Address,
+		Title:    profile.Title,
+	})
+
+	bin := xrayBinaryPath(s.exePath)
+	vpn := settings.RuntimeMode != "proxy"
+	cfgJSON, err := xray.Build(xray.Options{
+		XrayBin:    bin,
+		Profile:    profile,
+		Settings:   settings,
+		IncludeTun: vpn,
+	})
+	if err != nil {
+		s.runtimeLogf("xray build config failure: %v", err)
+		return s.fail(err)
+	}
+
+	if !vpn {
+		lp, err := xray.StartLocal(bin, cfgJSON)
+		if err != nil {
+			s.runtimeLogf("xray local start failure: %v", err)
+			return s.fail(err)
+		}
+		s.mu.Lock()
+		s.xrayProc = lp
+		s.mu.Unlock()
+	} else {
+		dp := dataplane.NewController(s.exePath, ProtectSocket, fwMark, s.runtimeLogWriter())
+		if err := dp.Start(); err != nil {
+			s.runtimeLogf("dp.Start failure: %v", err)
+			return s.fail(err)
+		}
+		if err := dp.XrayUp(bin, cfgJSON, xray.TunDeviceName, "", settings.IPv6); err != nil {
+			s.runtimeLogf("xrayup failure: %v", err)
+			dp.Stop()
+			return s.fail(err)
+		}
+		s.mu.Lock()
+		s.dp = dp
+		s.mu.Unlock()
+	}
+
+	s.setState(ConnectionState{Status: StatusConnected, Endpoint: profile.Address, Title: profile.Title})
+	s.runtimeLogf("xray connected state ready title=%q", profile.Title)
+	// Refresh the exit IP now that traffic goes through the new backend.
+	go func() { _, _ = s.RefreshIPInfo() }()
+	return s.State(), nil
+}
+
+func (s *ConnectionService) xrayActiveProfile() (config.XrayProfile, bool) {
+	id := s.store.XrayActiveID()
+	if id == "" {
+		return config.XrayProfile{}, false
+	}
+	for _, p := range s.store.XrayList() {
+		if p.ID == id {
+			return p, true
+		}
+	}
+	return config.XrayProfile{}, false
+}
+
+// xrayBinaryPath locates the bin/xray helper: next to the app executable first (production
+// layout), then bin/xray in the working tree (dev), then PATH.
+func xrayBinaryPath(exePath string) string {
+	name := "xray"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	if dir := filepath.Dir(exePath); dir != "" {
+		candidate := filepath.Join(dir, name)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	if _, err := os.Stat(filepath.Join("bin", name)); err == nil {
+		if abs, err := filepath.Abs(filepath.Join("bin", name)); err == nil {
+			return abs
+		}
+	}
+	return name
 }
 
 func (s *ConnectionService) activeProfile() (config.Profile, bool) {

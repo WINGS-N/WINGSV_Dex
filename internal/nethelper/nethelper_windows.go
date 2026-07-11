@@ -42,6 +42,12 @@ type command struct {
 	Whitelist     bool      `json:"whitelist"`
 	SelfPid       int       `json:"selfPid"`
 	IP            string    `json:"ip"`
+
+	XrayBin    string `json:"xrayBin"`
+	XrayConfig string `json:"xrayConfig"`
+	TunName    string `json:"tunName"`
+	DatDir     string `json:"datDir"`
+	EnableIPv6 bool   `json:"enableIpv6"`
 }
 
 type reply struct {
@@ -97,7 +103,12 @@ func Run() error {
 
 	var tun *wgwin.Tunnel
 	var vkturnPid int
+	var xray *xrayChild
 	teardown := func() {
+		if xray != nil {
+			xray.stop()
+			xray = nil
+		}
 		if tun != nil {
 			tun.Down()
 			tun = nil
@@ -166,6 +177,26 @@ func Run() error {
 			// TODO(windows-split-tunnel): per-app bypass/whitelist via WFP.
 			_ = enc.Encode(reply{OK: true})
 		case "appsdown":
+			_ = enc.Encode(reply{OK: true})
+		case "xrayup":
+			if xray != nil {
+				xray.stop()
+				xray = nil
+			}
+			x, err := startXray(cmd.XrayBin, cmd.XrayConfig, cmd.TunName, cmd.DatDir, cmd.EnableIPv6)
+			if err != nil {
+				log.Printf("xrayup failed: %v", err)
+				_ = enc.Encode(reply{Error: err.Error()})
+				continue
+			}
+			xray = x
+			log.Printf("xrayup ok: tun=%s pid=%d", cmd.TunName, x.cmd.Process.Pid)
+			_ = enc.Encode(reply{OK: true})
+		case "xraydown":
+			if xray != nil {
+				xray.stop()
+				xray = nil
+			}
 			_ = enc.Encode(reply{OK: true})
 		case "stop":
 			return nil
