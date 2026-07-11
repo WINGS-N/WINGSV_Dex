@@ -41,7 +41,8 @@
                 <span class="text-[17px]">Обновить подписки</span>
                 <span class="mt-0.5 text-sm text-wings-muted">Последнее обновление: {{ lastUpdatedText }}</span>
               </span>
-              <RefreshCw :size="20" class="shrink-0 text-wings-muted" :class="{ 'animate-spin': refreshingSubs }" />
+              <SamsungSpinner v-if="refreshingSubs" class="shrink-0" />
+              <RefreshCw v-else :size="20" class="shrink-0 text-wings-muted" />
             </button>
             <button
               type="button"
@@ -58,6 +59,10 @@
                 :class="{ 'rotate-90': showTest }"
               />
             </button>
+            <div v-if="showTest" class="flex gap-2 py-3">
+              <SamsungButton variant="secondary" :busy="testing" @click="runTest('tcping')">TCPing</SamsungButton>
+              <SamsungButton variant="secondary" :busy="testing" @click="runTest('real')">Real Delay</SamsungButton>
+            </div>
           </template>
 
           <button
@@ -75,11 +80,6 @@
               :class="{ 'rotate-90': showImport }"
             />
           </button>
-        </div>
-
-        <div v-if="showTest && isXray" class="mt-3 flex gap-2">
-          <SamsungButton variant="secondary" :busy="testing" @click="runTest('tcping')">TCPing</SamsungButton>
-          <SamsungButton variant="secondary" :busy="testing" @click="runTest('real')">Real Delay</SamsungButton>
         </div>
 
         <div v-if="showImport" class="mt-3 flex flex-col gap-2">
@@ -155,8 +155,9 @@
                     </div>
                     <span class="mt-0.5 block truncate text-sm text-wings-muted">{{ p.subtitle }}</span>
                   </button>
+                  <SamsungSpinner v-if="pending[p.id]" class="shrink-0" />
                   <span
-                    v-if="p.ping !== undefined"
+                    v-else-if="p.ping !== undefined"
                     class="shrink-0 rounded-full px-2.5 py-1 text-[13px] font-semibold"
                     :class="pingClass(p.ping)"
                   >
@@ -184,9 +185,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { Bookmark, Check, ChevronRight, ClipboardPaste, RefreshCw, Star, Trash2 } from 'lucide-vue-next';
-import { Clipboard } from '@wailsio/runtime';
+import { Clipboard, Events } from '@wailsio/runtime';
 import {
   ConnectionService,
   ProfilesService,
@@ -201,6 +202,7 @@ import AppHeader from '@/components/layout/AppHeader.vue';
 import SamsungCard from '@/components/layout/SamsungCard.vue';
 import SamsungButton from '@/components/layout/SamsungButton.vue';
 import SamsungSectionLoader from '@/components/layout/SamsungSectionLoader.vue';
+import SamsungSpinner from '@/components/layout/SamsungSpinner.vue';
 
 const profiles = ref([]);
 const activeId = ref('');
@@ -218,6 +220,7 @@ const refreshingSubs = ref(false);
 const linkText = ref('');
 const activeFilter = ref('all'); // all | favorites | <subscriptionId>
 const pings = reactive({}); // profileId -> delayMs (from the last test)
+const pending = reactive({}); // profileId -> true while its test is in flight
 const networkBackendOptions = [
   { value: 'vk_turn', label: 'VK TURN' },
   { value: 'xray', label: 'Xray' },
@@ -286,9 +289,10 @@ const filteredItems = computed(() => {
   return allItems.value.filter((p) => p.subscriptionId === activeFilter.value);
 });
 
-// Best-to-worst by ping once a test has run (tested first, failures and untested last).
+// Best-to-worst by ping once a test has finished (tested first, failures and untested last).
+// Held stable while the test is still streaming so rows do not jump around under the loader.
 function sortByPing(items) {
-  if (!hasPings.value) return items;
+  if (!hasPings.value || testing.value) return items;
   return [...items].sort((a, b) => rank(a.ping) - rank(b.ping));
 }
 function rank(ping) {
@@ -396,18 +400,19 @@ async function refreshSubs() {
   }
 }
 
+// Kick off the test; results stream back per node so a Samsung loader runs on each row
+// until its badge lands, then the list sorts best-to-worst once the run finishes.
 async function runTest(kind) {
-  testing.value = true;
   try {
-    const results = kind === 'real' ? await XrayTestService.RealDelayAll() : await XrayTestService.TCPingAll();
-    (results ?? []).forEach((r) => {
-      pings[r.id] = r.delayMs;
+    const ids = await XrayTestService.Start(kind);
+    Object.keys(pending).forEach((k) => delete pending[k]);
+    (ids ?? []).forEach((id) => {
+      pending[id] = true;
     });
+    testing.value = (ids ?? []).length > 0;
     showTest.value = false;
   } catch {
     showToast('Тест не удался', { type: 'warn' });
-  } finally {
-    testing.value = false;
   }
 }
 
@@ -467,5 +472,23 @@ async function remove(id) {
   apply(isXray.value ? await ProfilesService.XrayRemove(id) : await ProfilesService.Remove(id));
 }
 
-onMounted(refresh);
+let offResult = null;
+let offDone = null;
+onMounted(async () => {
+  await refresh();
+  offResult = Events.On('xraytest:result', (ev) => {
+    const d = ev?.data;
+    if (!d) return;
+    pings[d.id] = d.delayMs;
+    delete pending[d.id];
+  });
+  offDone = Events.On('xraytest:done', () => {
+    testing.value = false;
+    Object.keys(pending).forEach((k) => delete pending[k]);
+  });
+});
+onBeforeUnmount(() => {
+  if (offResult) offResult();
+  if (offDone) offDone();
+});
 </script>

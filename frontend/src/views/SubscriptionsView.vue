@@ -60,10 +60,11 @@
                   type="button"
                   aria-label="Обновить"
                   class="p-1 text-wings-muted hover:text-wings-accent"
-                  :disabled="busy"
+                  :disabled="busy || refreshing === sub.id"
                   @click="refresh(sub.id)"
                 >
-                  <RefreshCw :size="18" :class="{ 'animate-spin': refreshing === sub.id }" />
+                  <SamsungSpinner v-if="refreshing === sub.id" />
+                  <RefreshCw v-else :size="18" />
                 </button>
                 <button
                   type="button"
@@ -93,6 +94,7 @@ import { Events } from '@wailsio/runtime';
 import { SubscriptionService } from '@bindings/github.com/WINGS-N/wingsv-dex/internal/services';
 import SamsungCard from '@/components/layout/SamsungCard.vue';
 import SamsungButton from '@/components/layout/SamsungButton.vue';
+import SamsungSpinner from '@/components/layout/SamsungSpinner.vue';
 import OneuiInput from '@/components/controls/OneuiInput.vue';
 import OneuiSwitch from '@/components/controls/OneuiSwitch.vue';
 import { closeOverlay } from '@/stores/nav.js';
