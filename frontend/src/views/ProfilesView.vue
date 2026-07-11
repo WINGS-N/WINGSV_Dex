@@ -316,14 +316,20 @@ const allItems = computed(() => {
 
 const hasFavorites = computed(() => allItems.value.some((p) => p.favorite));
 
-// One chip per subscription that actually has nodes, plus a "Свои" chip for manual nodes.
+// One chip per subscription id that actually has nodes (incl. the synthetic "Автопоиск"
+// one), plus a "Свои" chip for manual nodes. Titles come from the subscriptions list, or the
+// profile's own subscriptionTitle for synthetic ids not in that list.
 const subscriptionChips = computed(() => {
   if (!isXray.value) return [];
-  const present = new Set(allItems.value.map((p) => p.subscriptionId));
-  const chips = subscriptions.value
-    .filter((s) => present.has(s.id))
-    .map((s) => ({ id: s.id, title: s.title || s.url }));
-  if (present.has('')) chips.push({ id: 'manual', title: 'Свои' });
+  const byId = new Map();
+  for (const p of xrayProfiles.value) {
+    if (p.subscriptionId && !byId.has(p.subscriptionId)) {
+      const sub = subscriptions.value.find((s) => s.id === p.subscriptionId);
+      byId.set(p.subscriptionId, sub?.title || sub?.url || p.subscriptionTitle || p.subscriptionId);
+    }
+  }
+  const chips = [...byId.entries()].map(([id, title]) => ({ id, title }));
+  if (xrayProfiles.value.some((p) => !p.subscriptionId)) chips.push({ id: 'manual', title: 'Свои' });
   return chips;
 });
 
@@ -354,9 +360,10 @@ const groups = computed(() => {
     return [{ key: 'flat', title: '', items: sortByPing(filteredItems.value) }];
   }
   const out = [];
-  for (const sub of subscriptions.value) {
-    const items = allItems.value.filter((p) => p.subscriptionId === sub.id);
-    if (items.length) out.push({ key: sub.id, title: sub.title || sub.url, items: sortByPing(items) });
+  for (const chip of subscriptionChips.value) {
+    if (chip.id === 'manual') continue;
+    const items = allItems.value.filter((p) => p.subscriptionId === chip.id);
+    if (items.length) out.push({ key: chip.id, title: chip.title, items: sortByPing(items) });
   }
   const manual = allItems.value.filter((p) => !p.subscriptionId);
   if (manual.length) out.push({ key: 'manual', title: 'Свои профили', items: sortByPing(manual) });

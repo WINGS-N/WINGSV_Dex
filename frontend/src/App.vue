@@ -5,6 +5,7 @@
     <SubscriptionsView v-else-if="overlay === 'subscriptions'" />
     <ByeDpiSettingsView v-else-if="overlay === 'byedpi-settings'" />
     <ByeDpiStrategyView v-else-if="overlay === 'byedpi-strategies'" />
+    <AutoSearchView v-else-if="overlay === 'autosearch'" />
     <LogsView v-else-if="overlay === 'logs'" />
     <AboutView v-else-if="overlay === 'about'" />
 
@@ -55,6 +56,7 @@ import XraySettingsView from '@/views/XraySettingsView.vue';
 import SubscriptionsView from '@/views/SubscriptionsView.vue';
 import ByeDpiSettingsView from '@/views/ByeDpiSettingsView.vue';
 import ByeDpiStrategyView from '@/views/ByeDpiStrategyView.vue';
+import AutoSearchView from '@/views/AutoSearchView.vue';
 import AboutView from '@/views/AboutView.vue';
 import ConfirmDialog from '@/components/layout/ConfirmDialog.vue';
 import ToastHost from '@/components/layout/ToastHost.vue';
