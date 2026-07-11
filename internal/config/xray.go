@@ -151,15 +151,27 @@ type XrayProfile struct {
 // DedupKey identifies the same node across re-imports by its raw share link.
 func (p XrayProfile) DedupKey() string { return strings.TrimSpace(p.RawLink) }
 
-// Subscription is a remote list of xray nodes refreshed on a schedule.
+// Subscription is a remote list of xray nodes refreshed on a schedule. The advertised*
+// fields are the per-subscription traffic quota reported by the server's
+// Subscription-Userinfo response header (upload/download/total bytes and an expiry).
 type Subscription struct {
-	ID                     string `json:"id"`
-	Title                  string `json:"title"`
-	URL                    string `json:"url"`
-	RefreshIntervalMinutes int    `json:"refreshIntervalMinutes,omitempty"`
-	AutoUpdate             bool   `json:"autoUpdate"`
-	LastUpdatedAt          int64  `json:"lastUpdatedAt,omitempty"`
+	ID                      string `json:"id"`
+	Title                   string `json:"title"`
+	URL                     string `json:"url"`
+	RefreshIntervalMinutes  int    `json:"refreshIntervalMinutes,omitempty"`
+	AutoUpdate              bool   `json:"autoUpdate"`
+	LastUpdatedAt           int64  `json:"lastUpdatedAt,omitempty"`
+	AdvertisedUploadBytes   int64  `json:"advertisedUploadBytes,omitempty"`
+	AdvertisedDownloadBytes int64  `json:"advertisedDownloadBytes,omitempty"`
+	AdvertisedTotalBytes    int64  `json:"advertisedTotalBytes,omitempty"`
+	AdvertisedExpireAt      int64  `json:"advertisedExpireAt,omitempty"`
 }
+
+// The built-in "Universal" subscription, seeded once on a fresh store.
+const (
+	DefaultSubscriptionURL   = "https://raw.githubusercontent.com/zieng2/wl/main/vless_universal.txt"
+	DefaultSubscriptionTitle = "Universal"
+)
 
 // xrayShareSchemes are the share-link schemes ParseShareLink recognizes as xray nodes.
 var xrayShareSchemes = []string{"vless", "vmess", "trojan", "ss", "hysteria2", "hy2"}

@@ -67,6 +67,7 @@ func main() {
 	vkAuthSvc := services.NewVKAuthService(manager, store, configDir)
 	connectionSvc := services.NewConnectionService(store, logStore, manager, vkAuthSvc, exePath)
 	aboutSvc := services.NewAboutService(func() { manager.Stop() })
+	subscriptionSvc := services.NewSubscriptionService(store)
 
 	app := application.New(application.Options{
 		Name:        "WINGS V DeX",
@@ -78,6 +79,7 @@ func main() {
 			application.NewService(services.NewAppsService(store, func() { _ = connectionSvc.ApplyAppRouting() })),
 			application.NewService(services.NewLogsService(logStore)),
 			application.NewService(aboutSvc),
+			application.NewService(subscriptionSvc),
 			application.NewService(services.NewOnboardingService(configDir)),
 			application.NewService(services.NewMusicService()),
 			application.NewService(services.NewAvatarService(configDir)),
@@ -101,6 +103,8 @@ func main() {
 	})
 	connectionSvc.SetApp(app)
 	aboutSvc.SetApp(app)
+	subscriptionSvc.SetApp(app)
+	subscriptionSvc.StartAutoUpdate()
 	logStore.SetListener(func(channel, line string) {
 		app.Event.Emit(services.LogLineEvent, services.LogLine{Channel: channel, Line: line})
 	})

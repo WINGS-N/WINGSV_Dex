@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/WINGS-N/wingsv-dex/internal/wingsv"
 )
@@ -30,10 +31,11 @@ type storeData struct {
 	AppRouting     AppRoutingSettings `json:"appRouting"`     // per-app split-tunnel mode + lists
 
 	// Xray backend state, parallel to the VK TURN profiles above.
-	XrayProfiles  []XrayProfile  `json:"xrayProfiles"`
-	XrayActiveID  string         `json:"xrayActiveId"`
-	XraySettings  XraySettings   `json:"xraySettings"`
-	Subscriptions []Subscription `json:"subscriptions"`
+	XrayProfiles     []XrayProfile  `json:"xrayProfiles"`
+	XrayActiveID     string         `json:"xrayActiveId"`
+	XraySettings     XraySettings   `json:"xraySettings"`
+	Subscriptions    []Subscription `json:"subscriptions"`
+	DefaultSubSeeded bool           `json:"defaultSubSeeded"` // the built-in Universal sub was added once
 }
 
 // NewStore loads the store from path, creating an empty one if the file is absent.
@@ -47,6 +49,7 @@ func NewStore(path string) (*Store, error) {
 		s.data.NetworkBackend = BackendVKTurn
 		s.data.XraySettings = DefaultXraySettings()
 		s.data.XraySettings.ensureCreds()
+		s.seedDefaultSubscriptionLocked()
 		return s, nil
 	}
 	if err != nil {
@@ -57,7 +60,29 @@ func NewStore(path string) (*Store, error) {
 			return nil, err
 		}
 	}
+	// Seed the built-in Universal subscription once, on this and older stores alike.
+	if !s.data.DefaultSubSeeded {
+		s.seedDefaultSubscriptionLocked()
+		_ = s.saveLocked()
+	}
 	return s, nil
+}
+
+// seedDefaultSubscriptionLocked adds the built-in Universal subscription if it is not
+// already present and marks it seeded so a user who deletes it is not re-seeded.
+func (s *Store) seedDefaultSubscriptionLocked() {
+	s.data.DefaultSubSeeded = true
+	for _, sub := range s.data.Subscriptions {
+		if strings.TrimSpace(sub.URL) == DefaultSubscriptionURL {
+			return
+		}
+	}
+	s.data.Subscriptions = append(s.data.Subscriptions, Subscription{
+		ID:         newID(),
+		Title:      DefaultSubscriptionTitle,
+		URL:        DefaultSubscriptionURL,
+		AutoUpdate: true,
+	})
 }
 
 // List returns a copy of the stored profiles.
@@ -208,6 +233,134 @@ func (s *Store) SetXraySettings(x XraySettings) error {
 	x.ensureCreds()
 	s.data.XraySettings = x
 	return s.saveLocked()
+}
+
+// SubscriptionList returns a copy of the stored subscriptions.
+func (s *Store) SubscriptionList() []Subscription {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]Subscription(nil), s.data.Subscriptions...)
+}
+
+// AddSubscription adds (or updates by URL) a subscription and returns it.
+func (s *Store) AddSubscription(title, url string) (Subscription, error) {
+	url = strings.TrimSpace(url)
+	if url == "" {
+		return Subscription{}, errors.New("empty subscription url")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sub := Subscription{Title: strings.TrimSpace(title), URL: url, AutoUpdate: true}
+	id := s.upsertSubscriptionLocked(sub)
+	if err := s.saveLocked(); err != nil {
+		return Subscription{}, err
+	}
+	for _, x := range s.data.Subscriptions {
+		if x.ID == id {
+			return x, nil
+		}
+	}
+	return sub, nil
+}
+
+// RemoveSubscription deletes a subscription and every Xray profile that came from it.
+func (s *Store) RemoveSubscription(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	keptSubs := s.data.Subscriptions[:0]
+	found := false
+	for _, sub := range s.data.Subscriptions {
+		if sub.ID == id {
+			found = true
+			continue
+		}
+		keptSubs = append(keptSubs, sub)
+	}
+	if !found {
+		return errors.New("unknown subscription")
+	}
+	s.data.Subscriptions = keptSubs
+	s.dropSubscriptionProfilesLocked(id)
+	return s.saveLocked()
+}
+
+// SetSubscriptionAutoUpdate toggles a subscription's auto-update flag.
+func (s *Store) SetSubscriptionAutoUpdate(id string, on bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.data.Subscriptions {
+		if s.data.Subscriptions[i].ID == id {
+			s.data.Subscriptions[i].AutoUpdate = on
+			return s.saveLocked()
+		}
+	}
+	return errors.New("unknown subscription")
+}
+
+// ApplySubscriptionNodes replaces the Xray profiles belonging to a subscription with a
+// freshly fetched set, updates its last-updated time and advertised quota, and preserves
+// the favorite flag / active pointer for nodes whose raw link is unchanged. An empty
+// nodes slice prunes the subscription's profiles (server returned none).
+func (s *Store) ApplySubscriptionNodes(id string, nodes []XrayProfile, upload, download, total, expire int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var sub *Subscription
+	for i := range s.data.Subscriptions {
+		if s.data.Subscriptions[i].ID == id {
+			sub = &s.data.Subscriptions[i]
+			break
+		}
+	}
+	if sub == nil {
+		return errors.New("unknown subscription")
+	}
+
+	// Carry over favorites keyed by raw link before dropping the old set.
+	fav := map[string]bool{}
+	for _, p := range s.data.XrayProfiles {
+		if p.SubscriptionID == id && p.Favorite {
+			fav[p.DedupKey()] = true
+		}
+	}
+	activeLink := ""
+	for _, p := range s.data.XrayProfiles {
+		if p.ID == s.data.XrayActiveID {
+			activeLink = p.DedupKey()
+		}
+	}
+
+	s.dropSubscriptionProfilesLocked(id)
+	for _, n := range nodes {
+		n.SubscriptionID = id
+		n.SubscriptionTitle = sub.Title
+		n.Favorite = fav[n.DedupKey()]
+		newID := s.upsertXrayLocked(n)
+		if activeLink != "" && n.DedupKey() == activeLink {
+			s.data.XrayActiveID = newID
+		}
+	}
+
+	sub.LastUpdatedAt = time.Now().Unix()
+	sub.AdvertisedUploadBytes = upload
+	sub.AdvertisedDownloadBytes = download
+	sub.AdvertisedTotalBytes = total
+	sub.AdvertisedExpireAt = expire
+	return s.saveLocked()
+}
+
+func (s *Store) dropSubscriptionProfilesLocked(id string) {
+	kept := s.data.XrayProfiles[:0]
+	for _, p := range s.data.XrayProfiles {
+		if p.SubscriptionID == id {
+			if p.ID == s.data.XrayActiveID {
+				s.data.XrayActiveID = ""
+			}
+			continue
+		}
+		kept = append(kept, p)
+	}
+	s.data.XrayProfiles = kept
 }
 
 // Client returns the device-global client settings with defaults applied for any
