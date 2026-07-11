@@ -48,6 +48,9 @@ type command struct {
 	TunName    string `json:"tunName"`
 	DatDir     string `json:"datDir"`
 	EnableIPv6 bool   `json:"enableIpv6"`
+
+	ByeDPIBin  string   `json:"byedpiBin"`
+	ByeDPIArgs []string `json:"byedpiArgs"`
 }
 
 type reply struct {
@@ -104,10 +107,15 @@ func Run() error {
 	var tun *wgwin.Tunnel
 	var vkturnPid int
 	var xray *xrayChild
+	var byedpi *byedpiChild
 	teardown := func() {
 		if xray != nil {
 			xray.stop()
 			xray = nil
+		}
+		if byedpi != nil {
+			byedpi.stop()
+			byedpi = nil
 		}
 		if tun != nil {
 			tun.Down()
@@ -196,6 +204,27 @@ func Run() error {
 			if xray != nil {
 				xray.stop()
 				xray = nil
+			}
+			_ = enc.Encode(reply{OK: true})
+		case "byedpiup":
+			if byedpi != nil {
+				byedpi.stop()
+				byedpi = nil
+			}
+			// Windows has no cgroup bypass here; ciadpi's upstream is not yet excluded
+			// from the full tunnel (a WFP exclusion, like the vkturn underlay, is TODO).
+			b, err := startByeDPI(cmd.ByeDPIBin, cmd.ByeDPIArgs)
+			if err != nil {
+				log.Printf("byedpiup failed: %v", err)
+				_ = enc.Encode(reply{Error: err.Error()})
+				continue
+			}
+			byedpi = b
+			_ = enc.Encode(reply{OK: true})
+		case "byedpidown":
+			if byedpi != nil {
+				byedpi.stop()
+				byedpi = nil
 			}
 			_ = enc.Encode(reply{OK: true})
 		case "stop":

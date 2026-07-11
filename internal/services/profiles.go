@@ -175,6 +175,20 @@ func (s *ProfilesService) SetXraySettings(x config.XraySettings) (config.XraySet
 	return s.store.XraySettings(), nil
 }
 
+// ByeDPISettings returns the current ByeDPI settings.
+func (s *ProfilesService) ByeDPISettings() config.ByeDPISettings {
+	return s.store.ByeDPISettings()
+}
+
+// SetByeDPISettings persists the ByeDPI settings.
+func (s *ProfilesService) SetByeDPISettings(b config.ByeDPISettings) (config.ByeDPISettings, error) {
+	if err := s.store.SetByeDPISettings(b); err != nil {
+		return config.ByeDPISettings{}, err
+	}
+	s.notify()
+	return s.store.ByeDPISettings(), nil
+}
+
 // SetClientSettings persists the device-global client parameters (VK-links pool,
 // threads, creds group size, VK auth mode, session mode, browser fingerprint).
 func (s *ProfilesService) SetClientSettings(client config.ClientSettings) (ProfilesResult, error) {

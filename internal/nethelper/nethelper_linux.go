@@ -33,6 +33,9 @@ type command struct {
 	TunName    string `json:"tunName"`    // tun device name xray creates
 	DatDir     string `json:"datDir"`     // geo asset directory (may be empty)
 	EnableIPv6 bool   `json:"enableIpv6"`
+
+	ByeDPIBin  string   `json:"byedpiBin"`  // path to bin/byedpi (ciadpi)
+	ByeDPIArgs []string `json:"byedpiArgs"` // ciadpi argv
 }
 
 type reply struct {
@@ -56,6 +59,7 @@ func Run() error {
 	var appsCg *wg.CgroupMark
 	var matcher *wg.AppMatcher
 	var xray *xrayChild
+	var byedpi *byedpiChild
 	appsDown := func() {
 		if matcher != nil {
 			matcher.Stop()
@@ -72,6 +76,10 @@ func Run() error {
 		if xray != nil {
 			xray.stop()
 			xray = nil
+		}
+		if byedpi != nil {
+			byedpi.stop()
+			byedpi = nil
 		}
 		if active != nil {
 			_ = wg.Down(*active)
@@ -211,6 +219,33 @@ func Run() error {
 			if xray != nil {
 				xray.stop()
 				xray = nil
+			}
+			_ = enc.Encode(reply{OK: true})
+		case "byedpiup":
+			if byedpi != nil {
+				byedpi.stop()
+				byedpi = nil
+			}
+			b, err := startByeDPI(cmd.ByeDPIBin, cmd.ByeDPIArgs)
+			if err != nil {
+				log.Printf("byedpiup failed: %v", err)
+				_ = enc.Encode(reply{Error: err.Error()})
+				continue
+			}
+			// Move ciadpi into the bypass cgroup so its upstream egress is fwmark-tagged
+			// and leaves the physical link instead of looping back into the tunnel it fronts.
+			if cmark != nil {
+				if err := cmark.Add(b.cmd.Process.Pid); err != nil {
+					log.Printf("byedpiup cgroup add failed: %v", err)
+				}
+			}
+			byedpi = b
+			log.Printf("byedpiup ok: pid=%d", b.cmd.Process.Pid)
+			_ = enc.Encode(reply{OK: true})
+		case "byedpidown":
+			if byedpi != nil {
+				byedpi.stop()
+				byedpi = nil
 			}
 			_ = enc.Encode(reply{OK: true})
 		case "stop":

@@ -24,6 +24,7 @@ tasks:
     cmds:
       - task: build:vkturn
       - task: build:xray
+      - task: build:byedpi
       - task: "{{.GOOS}}:build"
 
   package:
@@ -69,6 +70,18 @@ tasks:
       GOOS: '{{.GOOS}}'
     cmds:
       - go build -trimpath -ldflags="-s -w" -o ../../{{.BIN_DIR}}/xray{{if eq .GOOS "windows"}}.exe{{end}} .
+
+  build:byedpi:
+    summary: Build the ByeDPI proxy (ciadpi) from the submodule into bin/byedpi[.exe] for {{.GOOS}}
+    dir: external/byedpi
+    preconditions:
+      - sh: test -f Makefile
+        msg: "byedpi submodule is not initialized. Run: git submodule update --init external/byedpi"
+    cmds:
+      - make clean >/dev/null 2>&1 || true
+      - '{{if eq .GOOS "windows"}}make windows CC=x86_64-w64-mingw32-gcc{{else}}make{{end}}'
+      - cp ciadpi{{if eq .GOOS "windows"}}.exe{{end}} ../../{{.BIN_DIR}}/byedpi{{if eq .GOOS "windows"}}.exe{{end}}
+      - make clean >/dev/null 2>&1 || true
 
   setup:docker:
     summary: Builds Docker image for cross-compilation (~800MB download)

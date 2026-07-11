@@ -63,6 +63,11 @@ type command struct {
 	TunName    string `json:"tunName,omitempty"`
 	DatDir     string `json:"datDir,omitempty"`
 	EnableIPv6 bool   `json:"enableIpv6,omitempty"`
+
+	// ByeDPI front: the helper spawns ciadpi into the bypass cgroup so its upstream
+	// egress skips the tunnel, and xray dials its local SOCKS as a DPI-bypass front.
+	ByeDPIBin  string   `json:"byedpiBin,omitempty"`
+	ByeDPIArgs []string `json:"byedpiArgs,omitempty"`
 }
 
 type reply struct {
@@ -238,6 +243,18 @@ func (c *Controller) XrayUp(xrayBin, configJSON, tunName, datDir string, enableI
 		DatDir:     datDir,
 		EnableIPv6: enableIPv6,
 	})
+}
+
+// ByeDPIUp has the helper spawn ciadpi into the bypass cgroup (so its upstream traffic
+// leaves the physical link, not the tunnel it fronts). Call before XrayUp.
+func (c *Controller) ByeDPIUp(bin string, args []string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.h == nil {
+		return errors.New("dataplane: not started")
+	}
+	logLine(c.logw, "dataplane: sending byedpiup bin=%s args=%d", bin, len(args))
+	return c.send(command{Cmd: "byedpiup", ByeDPIBin: bin, ByeDPIArgs: args})
 }
 
 // XrayDown stops the xray child, tearing its TUN (and thus its routes) down.

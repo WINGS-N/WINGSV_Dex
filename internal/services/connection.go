@@ -18,6 +18,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"github.com/WINGS-N/wingsv-dex/internal/applog"
+	"github.com/WINGS-N/wingsv-dex/internal/byedpi"
 	"github.com/WINGS-N/wingsv-dex/internal/config"
 	"github.com/WINGS-N/wingsv-dex/internal/dataplane"
 	"github.com/WINGS-N/wingsv-dex/internal/gen/appcontrolpb"
@@ -110,6 +111,7 @@ type ConnectionService struct {
 	telCancel      context.CancelFunc
 	dp             *dataplane.Controller
 	xrayProc       *xray.LocalProcess // proxy-only xray child (vpn mode runs via the helper)
+	byedpiProc     *byedpi.Process    // proxy-only ByeDPI front (vpn mode runs via the helper)
 	ipInfo         IPInfo
 	vkAuthInFlight bool
 
@@ -581,12 +583,17 @@ func (s *ConnectionService) Disconnect() ConnectionState {
 	s.dp = nil
 	xp := s.xrayProc
 	s.xrayProc = nil
+	bp := s.byedpiProc
+	s.byedpiProc = nil
 	s.mu.Unlock()
 
 	s.setState(ConnectionState{Status: StatusStopping})
 	s.manager.Stop()
 	if xp != nil {
 		xp.Stop()
+	}
+	if bp != nil {
+		bp.Stop()
 	}
 	if dp != nil {
 		dp.Stop()
@@ -624,12 +631,20 @@ func (s *ConnectionService) connectXray() (ConnectionState, error) {
 	})
 
 	bin := xrayBinaryPath(s.exePath)
+	byedpiBin := helperBinaryPath(s.exePath, "byedpi")
+	byedpiSettings := s.store.ByeDPISettings()
 	vpn := settings.RuntimeMode != "proxy"
+
+	frontSocks := ""
+	if byedpiSettings.Enabled {
+		frontSocks = byedpiSettings.ListenAddr()
+	}
 	cfgJSON, err := xray.Build(xray.Options{
-		XrayBin:    bin,
-		Profile:    profile,
-		Settings:   settings,
-		IncludeTun: vpn,
+		XrayBin:          bin,
+		Profile:          profile,
+		Settings:         settings,
+		IncludeTun:       vpn,
+		ByeDPIFrontSocks: frontSocks,
 	})
 	if err != nil {
 		s.runtimeLogf("xray build config failure: %v", err)
@@ -637,9 +652,20 @@ func (s *ConnectionService) connectXray() (ConnectionState, error) {
 	}
 
 	if !vpn {
+		if byedpiSettings.Enabled {
+			bp, err := byedpi.Start(byedpiBin, byedpiSettings)
+			if err != nil {
+				s.runtimeLogf("byedpi local start failure: %v", err)
+				return s.fail(err)
+			}
+			s.mu.Lock()
+			s.byedpiProc = bp
+			s.mu.Unlock()
+		}
 		lp, err := xray.StartLocal(bin, cfgJSON)
 		if err != nil {
 			s.runtimeLogf("xray local start failure: %v", err)
+			s.stopByedpiProc()
 			return s.fail(err)
 		}
 		s.mu.Lock()
@@ -650,6 +676,13 @@ func (s *ConnectionService) connectXray() (ConnectionState, error) {
 		if err := dp.Start(); err != nil {
 			s.runtimeLogf("dp.Start failure: %v", err)
 			return s.fail(err)
+		}
+		if byedpiSettings.Enabled {
+			if err := dp.ByeDPIUp(byedpiBin, byedpi.Args(byedpiSettings)); err != nil {
+				s.runtimeLogf("byedpiup failure: %v", err)
+				dp.Stop()
+				return s.fail(err)
+			}
 		}
 		if err := dp.XrayUp(bin, cfgJSON, xray.TunDeviceName, "", settings.IPv6); err != nil {
 			s.runtimeLogf("xrayup failure: %v", err)
@@ -681,10 +714,21 @@ func (s *ConnectionService) xrayActiveProfile() (config.XrayProfile, bool) {
 	return config.XrayProfile{}, false
 }
 
-// xrayBinaryPath locates the bin/xray helper: next to the app executable first (production
-// layout), then bin/xray in the working tree (dev), then PATH.
-func xrayBinaryPath(exePath string) string {
-	name := "xray"
+func (s *ConnectionService) stopByedpiProc() {
+	s.mu.Lock()
+	bp := s.byedpiProc
+	s.byedpiProc = nil
+	s.mu.Unlock()
+	if bp != nil {
+		bp.Stop()
+	}
+}
+
+func xrayBinaryPath(exePath string) string { return helperBinaryPath(exePath, "xray") }
+
+// helperBinaryPath locates a sidecar binary (xray, byedpi): next to the app executable
+// first (production layout), then bin/<name> in the working tree (dev), then PATH.
+func helperBinaryPath(exePath, name string) string {
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}

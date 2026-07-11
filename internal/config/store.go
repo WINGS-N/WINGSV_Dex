@@ -36,6 +36,7 @@ type storeData struct {
 	XraySettings     XraySettings   `json:"xraySettings"`
 	Subscriptions    []Subscription `json:"subscriptions"`
 	DefaultSubSeeded bool           `json:"defaultSubSeeded"` // the built-in Universal sub was added once
+	ByeDPISettings   ByeDPISettings `json:"byedpiSettings"`
 }
 
 // NewStore loads the store from path, creating an empty one if the file is absent.
@@ -49,6 +50,8 @@ func NewStore(path string) (*Store, error) {
 		s.data.NetworkBackend = BackendVKTurn
 		s.data.XraySettings = DefaultXraySettings()
 		s.data.XraySettings.ensureCreds()
+		s.data.ByeDPISettings = DefaultByeDPISettings()
+		s.data.ByeDPISettings.ensureCreds()
 		s.seedDefaultSubscriptionLocked()
 		return s, nil
 	}
@@ -232,6 +235,29 @@ func (s *Store) SetXraySettings(x XraySettings) error {
 	x = x.withDefaults()
 	x.ensureCreds()
 	s.data.XraySettings = x
+	return s.saveLocked()
+}
+
+// ByeDPISettings returns the ByeDPI settings, backstopping defaults and generating the
+// local SOCKS credentials on first read when auth is enabled.
+func (s *Store) ByeDPISettings() ByeDPISettings {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b := s.data.ByeDPISettings.withDefaults()
+	if b.ensureCreds() {
+		s.data.ByeDPISettings = b
+		_ = s.saveLocked()
+	}
+	return b
+}
+
+// SetByeDPISettings persists the ByeDPI settings.
+func (s *Store) SetByeDPISettings(b ByeDPISettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b = b.withDefaults()
+	b.ensureCreds()
+	s.data.ByeDPISettings = b
 	return s.saveLocked()
 }
 
