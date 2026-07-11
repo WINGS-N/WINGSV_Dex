@@ -18,14 +18,17 @@
 .dex-spin {
   position: relative;
   display: inline-block;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
 }
-/* The dots orbit the loader box's top-left origin, so pin that origin to the box centre. */
+/* The dots orbit the loader box's top-left origin: pin that origin to the box centre and
+   scale it down from there so the small colored cluster stays centred. */
 .dex-spin :deep(.samsung-loader) {
   position: absolute;
   top: 50%;
   left: 50%;
+  transform-origin: top left;
+  transform: scale(0.6);
 }
 </style>

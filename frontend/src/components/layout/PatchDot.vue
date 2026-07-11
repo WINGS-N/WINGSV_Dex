@@ -27,13 +27,15 @@ defineProps({
 .patchdot {
   position: relative;
   display: inline-block;
-  width: 22px;
-  height: 22px;
+  width: 15px;
+  height: 15px;
   flex-shrink: 0;
 }
 .patchdot :deep(.samsung-loader) {
   position: absolute;
   top: 50%;
   left: 50%;
+  transform-origin: top left;
+  transform: scale(0.55);
 }
 </style>
