@@ -37,7 +37,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { ShieldCheck, Globe, Radar, ListChecks, ScanSearch } from 'lucide-vue-next';
+import { ShieldCheck, Radar, ListChecks, ScanSearch } from 'lucide-vue-next';
 import { Clipboard } from '@wailsio/runtime';
 import { ProfilesService, OnboardingService } from '@bindings/github.com/WINGS-N/wingsv-dex/internal/services';
 import { closeOnboarding } from '@/stores/onboarding.js';
@@ -45,6 +45,7 @@ import { showToast } from '@/stores/toast.js';
 import IntroStep from '@/views/firstlaunch/IntroStep.vue';
 import ConnectionStep from '@/views/firstlaunch/ConnectionStep.vue';
 import VkTurnStep from '@/views/firstlaunch/VkTurnStep.vue';
+import XrayStep from '@/views/firstlaunch/XrayStep.vue';
 import StubStep from '@/views/firstlaunch/StubStep.vue';
 import DoneStep from '@/views/firstlaunch/DoneStep.vue';
 
@@ -62,14 +63,7 @@ const STEPS = {
   },
   connection: { comp: ConnectionStep },
   vkturn: { comp: VkTurnStep },
-  xray: {
-    comp: StubStep,
-    props: {
-      title: 'Настройки Xray',
-      subtitle: 'Xray (VLESS) в десктопной версии появится позже. Сейчас Dex работает в режиме VK TURN.',
-      icon: Globe,
-    },
-  },
+  xray: { comp: XrayStep },
   autosearch_settings: {
     comp: StubStep,
     props: {
@@ -194,9 +188,11 @@ async function importFromClipboard(finishOnSuccess) {
     return;
   }
   try {
-    await ProfilesService.ImportLink(text.trim());
+    // Understands wingsv:// (VK TURN or Xray), vless:// and http(s) subscription URLs,
+    // switching the network backend to match what was pasted.
+    await ProfilesService.SmartImport(text.trim());
   } catch {
-    showToast('В буфере нет подходящей ссылки wingsv://', { type: 'warn' });
+    showToast('В буфере нет подходящей ссылки или подписки', { type: 'warn' });
     return;
   }
   showToast('Профиль импортирован', { type: 'info' });
