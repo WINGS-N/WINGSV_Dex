@@ -37,6 +37,7 @@ func (m *MusicService) Play() error {
 	if cmd == nil {
 		return nil
 	}
+	hideWindow(cmd)
 	if err := cmd.Start(); err != nil {
 		return err
 	}
