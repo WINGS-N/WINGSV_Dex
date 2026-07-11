@@ -11,6 +11,15 @@ import (
 	"strings"
 )
 
+var nftCandidates = []string{
+	"nft",
+	"/run/current-system/sw/bin/nft",
+	"/usr/sbin/nft",
+	"/usr/bin/nft",
+	"/sbin/nft",
+	"/bin/nft",
+}
+
 // VkturnCgroup is the dedicated cgroup v2 the vkturn process is moved into so all of
 // its egress can be fwmark-tagged wholesale. Per-socket SO_MARK (the protect bridge)
 // only covers sockets vkturn opens through its protect dialer and misses the ones
@@ -176,14 +185,37 @@ func ensureModule(name string) {
 }
 
 func runNft(args ...string) error {
-	return exec.Command("nft", args...).Run()
+	nft, err := commandPath(nftCandidates)
+	if err != nil {
+		return err
+	}
+	return exec.Command(nft, args...).Run()
 }
 
 func runNftStdin(ruleset string) error {
-	cmd := exec.Command("nft", "-f", "-")
+	nft, err := commandPath(nftCandidates)
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command(nft, "-f", "-")
 	cmd.Stdin = strings.NewReader(ruleset)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+func commandPath(candidates []string) (string, error) {
+	for _, candidate := range candidates {
+		if strings.Contains(candidate, "/") {
+			if st, err := os.Stat(candidate); err == nil && !st.IsDir() {
+				return candidate, nil
+			}
+			continue
+		}
+		if path, err := exec.LookPath(candidate); err == nil {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("wg: nft not found; install nftables system-wide or expose nft at /run/current-system/sw/bin/nft")
 }

@@ -22,6 +22,7 @@ tasks:
   build:
     summary: Builds the application
     cmds:
+      - task: build:vkturn
       - task: "{{.GOOS}}:build"
 
   package:
@@ -47,6 +48,9 @@ tasks:
   build:vkturn:
     summary: Build the vk-turn-proxy client binary from the submodule into bin/vkturn[.exe] for {{.GOOS}}
     dir: external/vk-turn-proxy
+    preconditions:
+      - sh: test -d client
+        msg: "vk-turn-proxy submodule is not initialized. Run: git submodule update --init external/vk-turn-proxy"
     env:
       CGO_ENABLED: "0"
       GOOS: '{{.GOOS}}'

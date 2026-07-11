@@ -11,7 +11,7 @@ description: |
   WINGS V desktop VPN client (VK TURN + WireGuard).
   Wraps kernel WireGuard in DTLS-over-TURN via VK calls.
 vendor: WINGS-N
-homepage: https://github.com/WINGS-N/wingsv-dex
+homepage: https://github.com/WINGS-N/WINGSV_Dex
 license: GPL-3.0-only
 
 depends:

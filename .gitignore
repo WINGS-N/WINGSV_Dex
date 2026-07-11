@@ -27,6 +27,7 @@ build/android/gen/
 # Local
 tmp
 .claude/
+.slim/
 
 # NSIS installer artifact (produced by makensis / CI)
 build/windows/wingsv-dex-setup.exe

@@ -11,6 +11,7 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
+	"github.com/WINGS-N/wingsv-dex/internal/applog"
 	"github.com/WINGS-N/wingsv-dex/internal/config"
 	"github.com/WINGS-N/wingsv-dex/internal/nethelper"
 	"github.com/WINGS-N/wingsv-dex/internal/services"
@@ -51,15 +52,20 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	logStore, err := applog.NewStore(configDir)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	exePath, err := os.Executable()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	manager := vktp.NewManager(vkturnBinaryPath(), appControlAddr(configDir), services.ProtectSocket, os.Stderr)
+	proxyLogWriter := applog.NewLineWriter(logStore, applog.ChannelProxy, os.Stderr)
+	manager := vktp.NewManager(vkturnBinaryPath(), appControlAddr(configDir), services.ProtectSocket, proxyLogWriter)
 	vkAuthSvc := services.NewVKAuthService(manager, store, configDir)
-	connectionSvc := services.NewConnectionService(store, manager, vkAuthSvc, exePath)
+	connectionSvc := services.NewConnectionService(store, logStore, manager, vkAuthSvc, exePath)
 	aboutSvc := services.NewAboutService(func() { manager.Stop() })
 
 	app := application.New(application.Options{
@@ -70,6 +76,7 @@ func main() {
 			application.NewService(connectionSvc),
 			application.NewService(vkAuthSvc),
 			application.NewService(services.NewAppsService(store, func() { _ = connectionSvc.ApplyAppRouting() })),
+			application.NewService(services.NewLogsService(logStore)),
 			application.NewService(aboutSvc),
 			application.NewService(services.NewOnboardingService(configDir)),
 			application.NewService(services.NewMusicService()),

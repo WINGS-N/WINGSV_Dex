@@ -16,6 +16,7 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
+	"github.com/WINGS-N/wingsv-dex/internal/applog"
 	"github.com/WINGS-N/wingsv-dex/internal/config"
 	"github.com/WINGS-N/wingsv-dex/internal/dataplane"
 	"github.com/WINGS-N/wingsv-dex/internal/gen/appcontrolpb"
@@ -94,9 +95,10 @@ const (
 // ConnectionService connects/disconnects the active VK TURN profile via the vkturn
 // child process and streams live telemetry to the frontend.
 type ConnectionService struct {
-	store   *config.Store
-	manager *vktp.Manager
-	exePath string
+	store    *config.Store
+	logStore *applog.Store
+	manager  *vktp.Manager
+	exePath  string
 
 	vkauth *VKAuthService
 
@@ -128,13 +130,14 @@ type ConnectionService struct {
 // account sign-in service, and the path of this executable (re-launched as the
 // privileged net-helper). vkauth is taken as a constructor argument rather than an
 // exported setter so Wails does not treat VKAuthService as a boundary model.
-func NewConnectionService(store *config.Store, manager *vktp.Manager, vkauth *VKAuthService, exePath string) *ConnectionService {
+func NewConnectionService(store *config.Store, logStore *applog.Store, manager *vktp.Manager, vkauth *VKAuthService, exePath string) *ConnectionService {
 	return &ConnectionService{
-		store:   store,
-		manager: manager,
-		vkauth:  vkauth,
-		exePath: exePath,
-		state:   ConnectionState{Status: StatusDisconnected},
+		store:    store,
+		logStore: logStore,
+		manager:  manager,
+		vkauth:   vkauth,
+		exePath:  exePath,
+		state:    ConnectionState{Status: StatusDisconnected},
 	}
 }
 
@@ -162,6 +165,7 @@ func (s *ConnectionService) Connect() (ConnectionState, error) {
 	// Threads (and the rest of the connecting/telemetry counters) come from the
 	// device-global client settings, not the per-profile snapshot.
 	client := s.store.Client()
+	s.runtimeLogf("connect requested title=%q runtime=%s auth=%s managed=%v", profile.Title, client.RuntimeMode, client.VKAuthMode, profile.Managed)
 
 	s.setState(ConnectionState{
 		Status:   StatusConnecting,
@@ -173,19 +177,24 @@ func (s *ConnectionService) Connect() (ConnectionState, error) {
 
 	// 1. Privileged helper first (pkexec prompt): it hosts the protect socket that
 	// vkturn dials at launch to have its underlay sockets marked.
-	dp := dataplane.NewController(s.exePath, ProtectSocket, fwMark)
+	dp := dataplane.NewController(s.exePath, ProtectSocket, fwMark, s.runtimeLogWriter())
 	if err := dp.Start(); err != nil {
+		s.runtimeLogf("dp.Start failure: %v", err)
 		return s.fail(err)
 	}
+	s.runtimeLogf("dp.Start succeeded")
 
 	// 2. vkturn: move it into the marking cgroup the instant it is spawned (before
 	// Configure opens any underlay socket), so every socket it creates is
 	// fwmark-tagged and bypasses the tunnel. Its Configure also carries the protect
 	// socket name as a belt-and-suspenders per-socket mark.
+	s.runtimeLogf("manager.Start begin")
 	if err := s.manager.Start(profile, client, dp.CgroupAdd); err != nil {
+		s.runtimeLogf("manager.Start failure: %v", err)
 		dp.Stop()
 		return s.fail(err)
 	}
+	s.runtimeLogf("manager.Start succeeded")
 
 	// Subscribe to the event stream now, right after Configure, so the captcha/auth
 	// phases reach the pill before Provision and the tunnel come up.
@@ -199,6 +208,7 @@ func (s *ConnectionService) Connect() (ConnectionState, error) {
 	if client.VKAuthMode == "account" && s.vkauth != nil {
 		s.vkauth.ensureSession("")
 		if !s.vkauth.Status().LoggedIn {
+			s.runtimeLogf("missing VK login for account auth mode")
 			s.stopStreams()
 			s.manager.Stop()
 			dp.Stop()
@@ -210,6 +220,7 @@ func (s *ConnectionService) Connect() (ConnectionState, error) {
 	// the tunnel up through the helper.
 	wgCfg, err := s.resolveWG(profile, client)
 	if err != nil {
+		s.runtimeLogf("resolveWG failure: %v", err)
 		s.stopStreams()
 		s.manager.Stop()
 		dp.Stop()
@@ -235,8 +246,11 @@ func (s *ConnectionService) Connect() (ConnectionState, error) {
 		}
 		// Wait for the first stream to come up before the tunnel, so
 		// WG data is not forwarded into a session that is still negotiating.
+		s.runtimeLogf("waitWarmup begin")
 		s.waitWarmup(15 * time.Second)
+		s.runtimeLogf("waitWarmup done")
 		if err := dp.WGUp(wgCfg); err != nil {
+			s.runtimeLogf("WGUp failure: %v", err)
 			s.stopStreams()
 			s.manager.Stop()
 			dp.Stop()
@@ -269,6 +283,7 @@ func (s *ConnectionService) Connect() (ConnectionState, error) {
 	if client.VKAuthMode == "account" && s.vkauth != nil {
 		s.startCookieRotationPoll(ctx)
 	}
+	s.runtimeLogf("connected state ready title=%q", profile.Title)
 	return s.State(), nil
 }
 
@@ -301,9 +316,9 @@ func (s *ConnectionService) startUnderlayBypass(ctx context.Context, dp *datapla
 			}
 			activated = true
 			if err := dp.Activate(); err != nil {
-				log.Printf("[bypass] activate full tunnel: %v", err)
+				s.runtimeLogf("[bypass] activate full tunnel: %v", err)
 			} else {
-				log.Printf("[bypass] full tunnel activated")
+				s.runtimeLogf("[bypass] full tunnel activated")
 			}
 		}
 		// Activate once the underlay-IP burst goes quiet (or after a cap if none arrive), so
@@ -320,9 +335,9 @@ func (s *ConnectionService) startUnderlayBypass(ctx context.Context, dp *datapla
 					return
 				}
 				if err := dp.Bypass(ip); err != nil {
-					log.Printf("[bypass] route %s: %v", ip, err)
+					s.runtimeLogf("[bypass] route installed failed len=%d: %v", len(ip), err)
 				} else {
-					log.Printf("[bypass] route %s installed", ip)
+					s.runtimeLogf("[bypass] route installed len=%d", len(ip))
 				}
 				if !activated {
 					settle.Reset(1500 * time.Millisecond)
@@ -339,24 +354,45 @@ func (s *ConnectionService) fail(err error) (ConnectionState, error) {
 	return s.State(), err
 }
 
+func (s *ConnectionService) runtimeLogWriter() *applog.LineWriter {
+	if s.logStore == nil {
+		return nil
+	}
+	return applog.NewLineWriter(s.logStore, applog.ChannelRuntime, nil)
+}
+
+func (s *ConnectionService) runtimeLogf(format string, args ...any) {
+	s.appendLogf(applog.ChannelRuntime, format, args...)
+}
+
+func (s *ConnectionService) proxyLogf(format string, args ...any) {
+	s.appendLogf(applog.ChannelProxy, format, args...)
+}
+
+func (s *ConnectionService) appendLogf(channel string, format string, args ...any) {
+	msg := applog.Redact(fmt.Sprintf(format, args...))
+	log.Printf("%s", msg)
+	if s.logStore != nil {
+		_ = s.logStore.Append(channel, msg)
+		s.emit2(LogsUpdatedEvent, LogUpdate{Channel: channel})
+	}
+}
+
 // resolveWG builds the WireGuard data-plane config: provisioned on connect for
 // managed profiles (the node mints it), otherwise straight from the profile. The
 // peer endpoint is always vkturn's local listen, so WG traffic flows into vkturn.
 func (s *ConnectionService) resolveWG(p config.Profile, cs config.ClientSettings) (dataplane.WGConfig, error) {
-	log.Printf("[resolveWG] managed=%v profile_privkey_len=%d peerpub_len=%d addr=%q",
-		p.Managed, len(p.WG.PrivateKey), len(p.WG.PublicKey), p.WG.Addresses)
+	s.runtimeLogf("[resolveWG] managed=%v privkey_len=%d peerpub_len=%d addr_len=%d", p.Managed, len(p.WG.PrivateKey), len(p.WG.PublicKey), len(p.WG.Addresses))
 	if p.Managed {
 		token, err := base64.StdEncoding.DecodeString(p.ProvisionToken)
 		if err != nil {
 			return dataplane.WGConfig{}, fmt.Errorf("provision token: %w", err)
 		}
-		hwid := machineHWID()
-		wg, err := s.manager.Provision(p.ProvisionClientID, token, hwid, uint32(endpointPort(cs.LocalEndpoint)))
+		wg, err := s.manager.Provision(p.ProvisionClientID, token, machineHWID(), uint32(endpointPort(cs.LocalEndpoint)))
 		if err != nil {
 			return dataplane.WGConfig{}, err
 		}
-		log.Printf("[provision] hwid=%q -> privkey_len=%d peerpub_len=%d addr=%q allowed=%q",
-			hwid, len(wg.GetPrivateKey()), len(wg.GetServerPublicKey()), wg.GetAddress(), wg.GetAllowedIps())
+		s.runtimeLogf("[provision] privkey_len=%d peerpub_len=%d addr_len=%d allowed_len=%d", len(wg.GetPrivateKey()), len(wg.GetServerPublicKey()), len(wg.GetAddress()), len(wg.GetAllowedIps()))
 		cfg := dataplane.WGConfig{
 			Interface:     wgInterface,
 			PrivateKey:    wg.GetPrivateKey(),
@@ -498,6 +534,7 @@ func (s *ConnectionService) OnSettingsChanged() {
 
 	if needsReconnect(oldP, oldC, newP, newC) {
 		s.emit2(NoticeEventName, Notice{Message: "Переподключение для применения настроек", Kind: "info"})
+		s.runtimeLogf("settings changed: reconnect required")
 		go s.reconnect()
 		return
 	}
@@ -510,13 +547,16 @@ func (s *ConnectionService) OnSettingsChanged() {
 		return // nothing the relay cares about changed
 	}
 	if err := s.manager.PatchConfig(delta); err != nil {
+		s.runtimeLogf("settings live patch failure: %v", err)
 		go s.reconnect()
+		return
 	}
 }
 
 // reconnect tears the tunnel down and brings it back up, for settings changes the
 // relay cannot live-patch (WG transport, session mode, provisioned endpoint, ...).
 func (s *ConnectionService) reconnect() {
+	s.runtimeLogf("reconnect start")
 	s.Disconnect()
 	time.Sleep(400 * time.Millisecond)
 	_, _ = s.Connect()
@@ -524,6 +564,7 @@ func (s *ConnectionService) reconnect() {
 
 // Disconnect stops the vkturn process, tears the tunnel down, and clears the streams.
 func (s *ConnectionService) Disconnect() ConnectionState {
+	s.runtimeLogf("disconnect start")
 	s.mu.Lock()
 	if s.telCancel != nil {
 		s.telCancel()
@@ -544,6 +585,7 @@ func (s *ConnectionService) Disconnect() ConnectionState {
 	s.emit2(TrafficStatsEvent, TrafficStats{})
 	s.emit2(IPInfoEvent, IPInfo{})
 	s.setState(ConnectionState{Status: StatusDisconnected})
+	s.runtimeLogf("disconnect complete")
 	// The tunnel is down and routing is back on the physical link (dp.Stop tore it
 	// down synchronously): re-look up the now-physical exit IP so the card shows the
 	// real address instead of staying blank on the old tunnel IP.
@@ -580,7 +622,8 @@ func (s *ConnectionService) beginStreams(threads int) context.Context {
 	s.mu.Unlock()
 
 	go func() {
-		_ = s.manager.Events(ctx, func(ev *appcontrolpb.ProxyEvent) {
+		if err := s.manager.Events(ctx, func(ev *appcontrolpb.ProxyEvent) {
+			s.logProxyEvent(ev)
 			// VK account-mode session requests are handled off the pill path: the
 			// relay asks for the web session (empty required event) or drives the
 			// sign-in WebView with a join link.
@@ -619,7 +662,9 @@ func (s *ConnectionService) beginStreams(threads int) context.Context {
 				go func() { _, _ = s.RefreshIPInfo() }()
 			}
 			s.emit(snapshot)
-		})
+		}); err != nil {
+			s.proxyLogf("appcontrol events stream error: %v", err)
+		}
 	}()
 	return ctx
 }
@@ -631,7 +676,7 @@ func (s *ConnectionService) startTelemetryAndStats(ctx context.Context, threads 
 	s.refreshIPInfoAsync(ctx)
 
 	go func() {
-		_ = s.manager.Telemetry(ctx, func(count int64) {
+		if err := s.manager.Telemetry(ctx, func(count int64) {
 			s.mu.Lock()
 			if s.state.Status == StatusStopping || s.state.Status == StatusDisconnected {
 				s.mu.Unlock()
@@ -643,8 +688,32 @@ func (s *ConnectionService) startTelemetryAndStats(ctx context.Context, threads 
 			snapshot := s.state
 			s.mu.Unlock()
 			s.emit(snapshot)
-		})
+		}); err != nil {
+			s.proxyLogf("appcontrol telemetry stream error: %v", err)
+		}
 	}()
+}
+
+func (s *ConnectionService) logProxyEvent(ev *appcontrolpb.ProxyEvent) {
+	switch {
+	case ev.GetStatus() != nil:
+		st := ev.GetStatus()
+		s.proxyLogf("appcontrol status phase=%s connected_streams=%d", st.GetPhase(), st.GetConnectedStreams())
+	case ev.GetCaptcha() != nil:
+		s.proxyLogf("appcontrol captcha state=%s", ev.GetCaptcha().GetState())
+	case ev.GetLockout() != nil:
+		s.proxyLogf("appcontrol lockout seconds=%d", ev.GetLockout().GetSeconds())
+	case ev.GetVkCookiesRequired() != nil:
+		s.proxyLogf("appcontrol vk_cookies_required")
+	case ev.GetVkAccountAuth() != nil:
+		a := ev.GetVkAccountAuth()
+		s.proxyLogf("appcontrol vk_account_auth phase=%s has_link=%v", a.GetPhase(), strings.TrimSpace(a.GetLink()) != "")
+	case ev.GetPatchStatus() != nil:
+		ps := ev.GetPatchStatus()
+		s.proxyLogf("appcontrol patch field=%s state=%s message=%q", ps.GetField(), ps.GetState(), ps.GetMessage())
+	default:
+		s.proxyLogf("appcontrol event unhandled")
+	}
 }
 
 // requestVKAuth answers a relay session request: re-deliver the cached VK session

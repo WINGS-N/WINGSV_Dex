@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"time"
 
@@ -18,7 +19,8 @@ import (
 // over a named pipe. Windows cannot pipe stdio across the elevation boundary, so the
 // (medium-integrity) GUI hosts the control pipe and the (high-integrity) helper connects
 // to it as a client; a higher-integrity client may open a lower-integrity pipe.
-func startHelper(exePath string) (*helper, error) {
+func startHelper(exePath string, logw io.Writer) (*helper, error) {
+	logLine(logw, "dataplane: launching elevated helper exe=%s", exePath)
 	var b [8]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		return nil, err
@@ -37,6 +39,7 @@ func startHelper(exePath string) (*helper, error) {
 		_ = l.Close()
 		return nil, fmt.Errorf("dataplane: elevate helper: %w", err)
 	}
+	logLine(logw, "dataplane: waiting for elevated helper pipe=%s", pipeName)
 
 	// Wait for the helper to connect, but give up if the user denied UAC or it never
 	// comes up. Closing the listener unblocks the pending Accept.
@@ -55,6 +58,7 @@ func startHelper(exePath string) (*helper, error) {
 			return nil, fmt.Errorf("dataplane: helper connect: %w", r.e)
 		}
 		conn = r.c
+		logLine(logw, "dataplane: elevated helper connected")
 	case <-time.After(60 * time.Second):
 		_ = l.Close()
 		return nil, fmt.Errorf("dataplane: timed out waiting for the elevated helper (authorization denied?)")

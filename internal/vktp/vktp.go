@@ -24,6 +24,10 @@ import (
 	"github.com/WINGS-N/wingsv-dex/internal/gen/appcontrolpb"
 )
 
+type flushWriter interface {
+	Flush() error
+}
+
 // Manager owns a single vkturn process and its AppControl client.
 type Manager struct {
 	binaryPath    string
@@ -68,6 +72,7 @@ func (m *Manager) Start(profile config.Profile, client config.ClientSettings, on
 		_ = os.Remove(m.socketPath)
 	}
 
+	traceLog(m.logw, "vktp: starting vkturn binary=%s socket=%s", m.binaryPath, m.socketPath)
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, m.binaryPath,
 		"-app-grpc-socket", m.socketPath,
@@ -81,32 +86,45 @@ func (m *Manager) Start(profile config.Profile, client config.ClientSettings, on
 	setPdeathsig(cmd)
 	if err := cmd.Start(); err != nil {
 		cancel()
+		traceLog(m.logw, "vktp: start vkturn failed: %v", err)
 		return fmt.Errorf("vktp: start vkturn: %w", err)
 	}
+	traceLog(m.logw, "vktp: process started pid=%d", cmd.Process.Pid)
 
 	if onSpawn != nil {
+		traceLog(m.logw, "vktp: running onSpawn pid=%d", cmd.Process.Pid)
 		if err := onSpawn(cmd.Process.Pid); err != nil {
+			traceLog(m.logw, "vktp: onSpawn failed: %v", err)
 			cancel()
 			_ = cmd.Wait()
+			m.flushLogs()
 			return fmt.Errorf("vktp: on-spawn: %w", err)
 		}
 	}
 
+	traceLog(m.logw, "vktp: waiting for AppControl listener")
 	conn, err := m.dial(token)
 	if err != nil {
+		traceLog(m.logw, "vktp: AppControl dial failed: %v", err)
 		cancel()
 		_ = cmd.Wait()
+		m.flushLogs()
 		return err
 	}
+	traceLog(m.logw, "vktp: AppControl connected")
 	appctl := appcontrolpb.NewAppControlClient(conn)
 
+	traceLog(m.logw, "vktp: configuring relay managed=%v runtime=%s auth=%s threads=%d", profile.Managed, client.RuntimeMode, client.VKAuthMode, client.Threads)
 	if err := configure(appctl, profile, client, m.protectSocket); err != nil {
+		traceLog(m.logw, "vktp: configure failed: %v", err)
 		_ = conn.Close()
 		cancel()
 		_ = cmd.Wait()
+		m.flushLogs()
 		return err
 	}
 
+	traceLog(m.logw, "vktp: configure succeeded")
 	m.cmd, m.cancel, m.conn, m.client = cmd, cancel, conn, appctl
 	return nil
 }
@@ -329,6 +347,18 @@ func (m *Manager) Stop() {
 	m.stopLocked()
 }
 
+func traceLog(w io.Writer, format string, args ...any) {
+	if w != nil {
+		_, _ = fmt.Fprintf(w, format+"\n", args...)
+	}
+}
+
+func (m *Manager) flushLogs() {
+	if f, ok := m.logw.(flushWriter); ok {
+		_ = f.Flush()
+	}
+}
+
 func (m *Manager) stopLocked() {
 	if m.conn != nil {
 		_ = m.conn.Close()
@@ -341,6 +371,7 @@ func (m *Manager) stopLocked() {
 	if m.cmd != nil {
 		_ = m.cmd.Wait()
 		m.cmd = nil
+		m.flushLogs()
 	}
 	m.client = nil
 	// Belt-and-suspenders: kill any vkturn orphaned by a disconnect race or crash

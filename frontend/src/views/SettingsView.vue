@@ -26,6 +26,17 @@
             </span>
             <ChevronRight :size="20" class="shrink-0 text-wings-muted" />
           </button>
+          <button
+            type="button"
+            class="flex w-full items-center justify-between py-3.5 text-left"
+            @click="openOverlay('logs')"
+          >
+            <span class="flex flex-col">
+              <span class="text-[17px]">Журнал</span>
+              <span class="mt-0.5 text-sm text-wings-muted">Runtime и proxy события подключения</span>
+            </span>
+            <ChevronRight :size="20" class="shrink-0 text-wings-muted" />
+          </button>
         </div>
       </SamsungCard>
 

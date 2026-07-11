@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 )
@@ -78,6 +79,7 @@ type Controller struct {
 	exePath       string
 	protectSocket string
 	fwmark        int
+	logw          io.Writer
 
 	mu sync.Mutex
 	h  *helper
@@ -85,8 +87,12 @@ type Controller struct {
 
 // NewController prepares a controller for the given helper binary, protect socket
 // name (abstract) and firewall mark.
-func NewController(exePath, protectSocket string, fwmark int) *Controller {
-	return &Controller{exePath: exePath, protectSocket: protectSocket, fwmark: fwmark}
+func NewController(exePath, protectSocket string, fwmark int, logw ...io.Writer) *Controller {
+	var w io.Writer
+	if len(logw) > 0 {
+		w = logw[0]
+	}
+	return &Controller{exePath: exePath, protectSocket: protectSocket, fwmark: fwmark, logw: w}
 }
 
 // Start launches the privileged helper (elevating via the platform's prompt: pkexec on
@@ -98,15 +104,17 @@ func (c *Controller) Start() error {
 	if c.h != nil {
 		return errors.New("dataplane: already started")
 	}
-	h, err := startHelper(c.exePath)
+	h, err := startHelper(c.exePath, c.logw)
 	if err != nil {
 		return err
 	}
 	c.h = h
+	logLine(c.logw, "dataplane: sending start command protect_socket=%s fwmark=%d", c.protectSocket, c.fwmark)
 	if err := c.send(command{Cmd: "start", ProtectSocket: c.protectSocket, FwMark: c.fwmark}); err != nil {
 		c.stopLocked()
 		return err
 	}
+	logLine(c.logw, "dataplane: start command acknowledged")
 	return nil
 }
 
@@ -119,6 +127,7 @@ func (c *Controller) CgroupAdd(pid int) error {
 	if c.h == nil {
 		return errors.New("dataplane: not started")
 	}
+	logLine(c.logw, "dataplane: sending cgadd pid=%d", pid)
 	return c.send(command{Cmd: "cgadd", Pid: pid})
 }
 
@@ -130,6 +139,7 @@ func (c *Controller) WGUp(cfg WGConfig) error {
 		return errors.New("dataplane: not started")
 	}
 	cfg.FwMark = c.fwmark
+	logLine(c.logw, "dataplane: sending wgup interface=%s addresses=%d allowed_ips=%d whitelist=%v amnezia=%v", cfg.Interface, len(cfg.Addresses), len(cfg.AllowedIPs), cfg.Whitelist, cfg.Amnezia)
 	return c.send(command{Cmd: "wgup", Config: &cfg})
 }
 
@@ -220,13 +230,16 @@ func (c *Controller) stopLocked() {
 
 // send writes one command and waits for the helper's reply.
 func (c *Controller) send(cmd command) error {
+	logLine(c.logw, "dataplane: command %s write", cmd.Cmd)
 	if err := c.h.enc.Encode(cmd); err != nil {
 		return fmt.Errorf("dataplane: write %s: %w", cmd.Cmd, err)
 	}
 	var rep reply
+	logLine(c.logw, "dataplane: command %s wait reply", cmd.Cmd)
 	if err := c.h.dec.Decode(&rep); err != nil {
-		return fmt.Errorf("dataplane: %s: helper closed (authorization denied?): %w", cmd.Cmd, err)
+		return fmt.Errorf("dataplane: %s: helper closed before reply: %w; if stderr says Not authorized, verify pkexec with '/run/wrappers/bin/pkexec env SHELL=/run/current-system/sw/bin/bash id'", cmd.Cmd, err)
 	}
+	logLine(c.logw, "dataplane: command %s reply ok=%v error=%q", cmd.Cmd, rep.OK, rep.Error)
 	if !rep.OK {
 		return fmt.Errorf("dataplane: %s: %s", cmd.Cmd, rep.Error)
 	}
