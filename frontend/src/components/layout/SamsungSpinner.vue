@@ -1,10 +1,12 @@
 <template>
   <span class="dex-spin" aria-hidden="true">
-    <span class="samsung-loader">
-      <span class="samsung-loader-dot samsung-loader-dot-top"></span>
-      <span class="samsung-loader-dot samsung-loader-dot-right"></span>
-      <span class="samsung-loader-dot samsung-loader-dot-bottom"></span>
-      <span class="samsung-loader-dot samsung-loader-dot-left"></span>
+    <span class="dex-spin-scale">
+      <span class="samsung-loader">
+        <span class="samsung-loader-dot samsung-loader-dot-top"></span>
+        <span class="samsung-loader-dot samsung-loader-dot-right"></span>
+        <span class="samsung-loader-dot samsung-loader-dot-bottom"></span>
+        <span class="samsung-loader-dot samsung-loader-dot-left"></span>
+      </span>
     </span>
   </span>
 </template>
@@ -18,17 +20,18 @@
 .dex-spin {
   position: relative;
   display: inline-block;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
 }
-/* The dots orbit the loader box's top-left origin: pin that origin to the box centre and
-   scale it down from there so the small colored cluster stays centred. */
-.dex-spin :deep(.samsung-loader) {
+/* The loader spins itself, so the scale lives on this static wrapper (not on the loader,
+   whose rotate animation would override a static transform). Its origin is pinned to the
+   box centre and it scales down from there. */
+.dex-spin-scale {
   position: absolute;
   top: 50%;
   left: 50%;
   transform-origin: top left;
-  transform: scale(0.6);
+  transform: scale(0.48);
 }
 </style>

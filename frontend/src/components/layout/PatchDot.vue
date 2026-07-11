@@ -1,10 +1,12 @@
 <template>
   <span v-if="state === 'applying'" class="patchdot" aria-hidden="true">
-    <span class="samsung-loader">
-      <span class="samsung-loader-dot samsung-loader-dot-top"></span>
-      <span class="samsung-loader-dot samsung-loader-dot-right"></span>
-      <span class="samsung-loader-dot samsung-loader-dot-bottom"></span>
-      <span class="samsung-loader-dot samsung-loader-dot-left"></span>
+    <span class="patchdot-scale">
+      <span class="samsung-loader">
+        <span class="samsung-loader-dot samsung-loader-dot-top"></span>
+        <span class="samsung-loader-dot samsung-loader-dot-right"></span>
+        <span class="samsung-loader-dot samsung-loader-dot-bottom"></span>
+        <span class="samsung-loader-dot samsung-loader-dot-left"></span>
+      </span>
     </span>
   </span>
   <span v-else-if="state === 'failed' || state === 'reverted_needs_restart'" class="shrink-0 text-[15px] leading-none">
@@ -15,27 +17,27 @@
 <script setup>
 // Per-row live-patch status: the classic Samsung four-dot loader while the relay
 // applies the field, a warning glyph when it could only take effect on the next
-// restart. Nothing when idle or applied. Mirrors the app's in-row SESL loader.
+// restart. Nothing when idle or applied.
 defineProps({
   state: { type: String, default: '' },
 });
 </script>
 
 <style scoped>
-/* The four dots orbit the loader's top-left origin, so pin the loader to the centre
-   of a small fixed box (same trick as SamsungSectionLoader) to centre the cluster. */
 .patchdot {
   position: relative;
   display: inline-block;
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
 }
-.patchdot :deep(.samsung-loader) {
+/* Scale on this static wrapper, not on the loader itself - the loader has its own rotate
+   animation that would override a static transform. Origin pinned to the box centre. */
+.patchdot-scale {
   position: absolute;
   top: 50%;
   left: 50%;
   transform-origin: top left;
-  transform: scale(0.55);
+  transform: scale(0.45);
 }
 </style>
