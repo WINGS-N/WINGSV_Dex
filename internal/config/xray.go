@@ -157,6 +157,12 @@ type PingRecord struct {
 	LatencyMs int  `json:"latencyMs"`
 }
 
+// TrafficRecord is a profile's cumulative tunnel traffic in bytes (rx = downlink).
+type TrafficRecord struct {
+	Rx int64 `json:"rx"`
+	Tx int64 `json:"tx"`
+}
+
 // xrayPingKey keys a ping result by subscription + node identity, so a result survives a
 // subscription refresh (which mints new profile ids for the same underlying nodes).
 func xrayPingKey(p XrayProfile) string { return p.SubscriptionID + "|" + p.DedupKey() }

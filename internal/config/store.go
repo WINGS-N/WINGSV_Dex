@@ -38,6 +38,11 @@ type storeData struct {
 	DefaultSubSeeded bool                  `json:"defaultSubSeeded"` // the built-in Universal sub was added once
 	ByeDPISettings   ByeDPISettings        `json:"byedpiSettings"`
 	XrayPingResults  map[string]PingRecord `json:"xrayPingResults"` // keyed by xrayPingKey
+
+	// Cumulative per-profile tunnel traffic, keyed by the profile's stable identity so it
+	// survives re-imports: VK TURN by DedupKey, Xray by xrayPingKey.
+	VKTrafficResults   map[string]TrafficRecord `json:"vkTrafficResults"`
+	XrayTrafficResults map[string]TrafficRecord `json:"xrayTrafficResults"`
 }
 
 // NewStore loads the store from path, creating an empty one if the file is absent.
@@ -254,6 +259,88 @@ func (s *Store) SetXrayPingResults(byProfileID map[string]PingRecord) error {
 	return s.saveLocked()
 }
 
+// SetXrayTraffic stores a profile's cumulative traffic (absolute totals).
+func (s *Store) SetXrayTraffic(profileID string, rx, tx int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, p := range s.data.XrayProfiles {
+		if p.ID == profileID {
+			if s.data.XrayTrafficResults == nil {
+				s.data.XrayTrafficResults = map[string]TrafficRecord{}
+			}
+			s.data.XrayTrafficResults[xrayPingKey(p)] = TrafficRecord{Rx: rx, Tx: tx}
+			_ = s.saveLocked()
+			return
+		}
+	}
+}
+
+// XrayTrafficFor returns a profile's stored cumulative traffic (zero if none).
+func (s *Store) XrayTrafficFor(profileID string) TrafficRecord {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, p := range s.data.XrayProfiles {
+		if p.ID == profileID {
+			return s.data.XrayTrafficResults[xrayPingKey(p)]
+		}
+	}
+	return TrafficRecord{}
+}
+
+// XrayTrafficByProfileID maps stored traffic onto the current profile ids.
+func (s *Store) XrayTrafficByProfileID() map[string]TrafficRecord {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := map[string]TrafficRecord{}
+	for _, p := range s.data.XrayProfiles {
+		if r, ok := s.data.XrayTrafficResults[xrayPingKey(p)]; ok {
+			out[p.ID] = r
+		}
+	}
+	return out
+}
+
+// SetVKTraffic stores a VK TURN profile's cumulative traffic (absolute totals).
+func (s *Store) SetVKTraffic(profileID string, rx, tx int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, p := range s.data.Profiles {
+		if p.ID == profileID {
+			if s.data.VKTrafficResults == nil {
+				s.data.VKTrafficResults = map[string]TrafficRecord{}
+			}
+			s.data.VKTrafficResults[p.DedupKey()] = TrafficRecord{Rx: rx, Tx: tx}
+			_ = s.saveLocked()
+			return
+		}
+	}
+}
+
+// VKTrafficFor returns a VK TURN profile's stored cumulative traffic.
+func (s *Store) VKTrafficFor(profileID string) TrafficRecord {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, p := range s.data.Profiles {
+		if p.ID == profileID {
+			return s.data.VKTrafficResults[p.DedupKey()]
+		}
+	}
+	return TrafficRecord{}
+}
+
+// VKTrafficByProfileID maps stored traffic onto the current VK TURN profile ids.
+func (s *Store) VKTrafficByProfileID() map[string]TrafficRecord {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := map[string]TrafficRecord{}
+	for _, p := range s.data.Profiles {
+		if r, ok := s.data.VKTrafficResults[p.DedupKey()]; ok {
+			out[p.ID] = r
+		}
+	}
+	return out
+}
+
 // XrayPingByProfileID returns the persisted results mapped onto the current profile ids.
 func (s *Store) XrayPingByProfileID() map[string]PingRecord {
 	s.mu.Lock()
@@ -279,6 +366,11 @@ func (s *Store) prunePingResultsLocked() {
 	for k := range s.data.XrayPingResults {
 		if !keep[k] {
 			delete(s.data.XrayPingResults, k)
+		}
+	}
+	for k := range s.data.XrayTrafficResults {
+		if !keep[k] {
+			delete(s.data.XrayTrafficResults, k)
 		}
 	}
 }

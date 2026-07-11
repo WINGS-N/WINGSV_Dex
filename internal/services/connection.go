@@ -695,6 +695,19 @@ func (s *ConnectionService) connectXray() (ConnectionState, error) {
 		s.mu.Unlock()
 	}
 
+	// VPN mode owns a TUN, so poll its counters for the live/home stats and accumulate the
+	// active profile's cumulative traffic. Disconnect cancels this via telCancel.
+	if vpn {
+		ctx, cancel := context.WithCancel(context.Background())
+		s.mu.Lock()
+		s.telCancel = cancel
+		s.mu.Unlock()
+		base := s.store.XrayTrafficFor(profile.ID)
+		s.runStatsPoller(ctx, xrayTrafficStats, func(rx, tx int64) {
+			s.store.SetXrayTraffic(profile.ID, base.Rx+rx, base.Tx+tx)
+		})
+	}
+
 	s.setState(ConnectionState{Status: StatusConnected, Endpoint: profile.Address, Title: profile.Title})
 	s.runtimeLogf("xray connected state ready title=%q", profile.Title)
 	// Refresh the exit IP now that traffic goes through the new backend.
@@ -826,7 +839,13 @@ func (s *ConnectionService) beginStreams(threads int) context.Context {
 // startTelemetryAndStats starts the N/M counter, traffic stats and exit-IP lookup once
 // the WireGuard interface exists (after WGUp), sharing beginStreams' cancel context.
 func (s *ConnectionService) startTelemetryAndStats(ctx context.Context, threads int) {
-	s.startStatsPoller(ctx)
+	s.mu.Lock()
+	activeID := s.appliedProfile.ID
+	s.mu.Unlock()
+	base := s.store.VKTrafficFor(activeID)
+	s.runStatsPoller(ctx, s.wgTrafficStats, func(rx, tx int64) {
+		s.store.SetVKTraffic(activeID, base.Rx+rx, base.Tx+tx)
+	})
 	s.refreshIPInfoAsync(ctx)
 
 	go func() {

@@ -44,6 +44,9 @@ type ProfilesResult struct {
 	XrayActiveID   string                `json:"xrayActiveId"`
 	Subscriptions  []config.Subscription `json:"subscriptions"`
 	XrayPings      map[string]int64      `json:"xrayPings"` // profileId -> last delay ms (-1 = failed)
+
+	// Cumulative per-profile traffic, keyed by profile id (both backends).
+	Traffic map[string]config.TrafficRecord `json:"traffic"`
 }
 
 func (s *ProfilesService) snapshot() ProfilesResult {
@@ -57,7 +60,18 @@ func (s *ProfilesService) snapshot() ProfilesResult {
 		XrayActiveID:   s.store.XrayActiveID(),
 		Subscriptions:  s.store.SubscriptionList(),
 		XrayPings:      xrayPingsToDelays(s.store.XrayPingByProfileID()),
+		Traffic:        mergeTraffic(s.store.VKTrafficByProfileID(), s.store.XrayTrafficByProfileID()),
 	}
+}
+
+func mergeTraffic(maps ...map[string]config.TrafficRecord) map[string]config.TrafficRecord {
+	out := map[string]config.TrafficRecord{}
+	for _, m := range maps {
+		for id, r := range m {
+			out[id] = r
+		}
+	}
+	return out
 }
 
 // xrayPingsToDelays flattens persisted results to a profileId -> delay map, with -1 for a

@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/WINGS-N/wingsv-dex/internal/xray"
 )
 
 // Traffic + IP-info event names the frontend subscribes to.
@@ -38,21 +40,27 @@ type IPInfo struct {
 	Provider    string `json:"provider"`
 }
 
-// startStatsPoller samples the WireGuard interface counters once a second and emits
-// the totals plus per-second rates until ctx is cancelled. Counters come from sysfs
-// (world-readable), so no privilege is needed here.
-func (s *ConnectionService) startStatsPoller(ctx context.Context) {
+// runStatsPoller samples a tunnel's counters once a second, emits the totals plus
+// per-second rates, and periodically persists the session totals via persist (which the
+// caller uses to accumulate the active profile's cumulative traffic). A final persist runs
+// when ctx is cancelled. Counters come from sysfs (world-readable), so no privilege is
+// needed here. persist may be nil.
+func (s *ConnectionService) runStatsPoller(ctx context.Context, read func() (int64, int64, bool), persist func(rx, tx int64)) {
 	go func() {
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
 		var lastRx, lastTx int64
 		first := true
+		tick := 0
 		for {
 			select {
 			case <-ctx.Done():
+				if !first && persist != nil {
+					persist(lastRx, lastTx)
+				}
 				return
 			case <-ticker.C:
-				rx, tx, ok := s.wgTrafficStats()
+				rx, tx, ok := read()
 				if !ok {
 					continue
 				}
@@ -63,9 +71,22 @@ func (s *ConnectionService) startStatsPoller(ctx context.Context) {
 				}
 				lastRx, lastTx, first = rx, tx, false
 				s.emit2(TrafficStatsEvent, stats)
+				tick++
+				if tick%10 == 0 && persist != nil {
+					persist(rx, tx)
+				}
 			}
 		}
 	}()
+}
+
+// xrayTrafficStats reads the xray TUN's counters. On Windows the wintun device lives in the
+// elevated helper without a sysfs path, so stats are unavailable there for now.
+func xrayTrafficStats() (int64, int64, bool) {
+	if runtime.GOOS == "windows" {
+		return 0, 0, false
+	}
+	return wgInterfaceStats(xray.TunDeviceName)
 }
 
 // IPInfo returns the last looked-up exit IP info.
