@@ -30,6 +30,7 @@
           @choice="handleChoice"
           @import="handleVkImport"
           @mode="handleAutoMode"
+          @back="handleAutoBack"
           @finish="complete"
         />
       </Transition>
@@ -158,6 +159,11 @@ function handleNext() {
 function handleAutoMode(mode) {
   autoMode.value = mode;
   goTo('autosearch_run');
+}
+
+// Cancelling the whitelist-wait returns to the mode choice rather than exiting onboarding.
+function handleAutoBack() {
+  goTo('autosearch_mode');
 }
 
 function handleChoice(choice) {

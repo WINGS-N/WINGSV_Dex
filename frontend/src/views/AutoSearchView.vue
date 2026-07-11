@@ -95,7 +95,7 @@
         </template>
         <template v-else-if="state.phase === 'whitelist_wait'">
           <SamsungButton variant="primary" block @click="continueRun">Я подключил сеть</SamsungButton>
-          <SamsungButton variant="secondary" block @click="back">Отмена</SamsungButton>
+          <SamsungButton variant="secondary" block @click="cancelToMode">Отмена</SamsungButton>
         </template>
         <template v-else-if="state.phase === 'awaiting_apply'">
           <SamsungButton variant="primary" block @click="apply(true)">Применить</SamsungButton>
@@ -229,6 +229,14 @@ function restart() {
   state.phase = '';
   chain.value = [];
   step.value = 'settings';
+}
+
+// Cancel the whitelist wait and return to the mode choice (does not leave the screen).
+function cancelToMode() {
+  AutoSearchService.Cancel();
+  state.phase = '';
+  chain.value = [];
+  step.value = 'mode';
 }
 
 function back() {

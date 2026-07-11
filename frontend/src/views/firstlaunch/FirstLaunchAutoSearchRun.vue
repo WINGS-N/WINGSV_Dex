@@ -30,7 +30,7 @@
     <div class="shrink-0 pt-3">
       <template v-if="state.phase === 'whitelist_wait'">
         <SuwButton block @click="continueRun">Я подключил сеть с белым списком</SuwButton>
-        <SuwButton block class="mt-2" @click="$emit('finish')">Отмена</SuwButton>
+        <SuwButton block class="mt-2" @click="$emit('back')">Отмена</SuwButton>
       </template>
       <template v-else-if="state.phase === 'awaiting_apply'">
         <SuwButton block @click="apply(true)">Применить</SuwButton>
@@ -53,7 +53,7 @@ import ProfileChain from '@/components/autosearch/ProfileChain.vue';
 import ProgressBar from '@/components/autosearch/ProgressBar.vue';
 
 const props = defineProps({ mode: { type: String, default: 'standard' } });
-const emit = defineEmits(['finish']);
+const emit = defineEmits(['finish', 'back']);
 
 const state = reactive({ phase: 'prepare', completed: 0, total: 0, found: 0, target: 5, message: '' });
 const chain = ref([]);
