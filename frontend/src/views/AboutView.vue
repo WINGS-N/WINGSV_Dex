@@ -45,7 +45,7 @@
                 <span class="block h-full rounded-full bg-wings-accent transition-all" :style="{ width: `${pct}%` }" />
               </span>
             </span>
-            <SamsungLoader v-if="busy" class="shrink-0" />
+            <SamsungSpinner v-if="busy" class="shrink-0" />
             <component v-else :is="isAvailable ? Download : RefreshCw" :size="20" class="shrink-0 text-wings-muted" />
           </button>
         </SamsungCard>
@@ -142,7 +142,7 @@ import { ChevronLeft, ChevronRight, Download, RefreshCw } from 'lucide-vue-next'
 import { Browser, Events } from '@wailsio/runtime';
 import { AboutService } from '@bindings/github.com/WINGS-N/wingsv-dex/internal/services';
 import SamsungCard from '@/components/layout/SamsungCard.vue';
-import SamsungLoader from '@/components/layout/SamsungLoader.vue';
+import SamsungSpinner from '@/components/layout/SamsungSpinner.vue';
 import AvatarCircle from '@/components/layout/AvatarCircle.vue';
 import OpenSourceLicensesView from '@/views/OpenSourceLicensesView.vue';
 import { closeOverlay } from '@/stores/nav.js';
