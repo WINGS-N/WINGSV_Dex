@@ -23,6 +23,7 @@ tasks:
     summary: Builds the application
     cmds:
       - task: build:vkturn
+      - task: build:xray
       - task: "{{.GOOS}}:build"
 
   package:
@@ -56,6 +57,18 @@ tasks:
       GOOS: '{{.GOOS}}'
     cmds:
       - go build -trimpath -ldflags="-s -w" -o ../../{{.BIN_DIR}}/vkturn{{if eq .GOOS "windows"}}.exe{{end}} ./client
+
+  build:xray:
+    summary: Build the xray helper (cmd/xrayhelper, wrapping the libXray submodule) into bin/xray[.exe] for {{.GOOS}}
+    dir: cmd/xrayhelper
+    preconditions:
+      - sh: test -f ../../external/libXray/go.mod
+        msg: "libXray/Xray-core submodules are not initialized. Run: git submodule update --init external/libXray external/Xray-core"
+    env:
+      CGO_ENABLED: "0"
+      GOOS: '{{.GOOS}}'
+    cmds:
+      - go build -trimpath -ldflags="-s -w" -o ../../{{.BIN_DIR}}/xray{{if eq .GOOS "windows"}}.exe{{end}} .
 
   setup:docker:
     summary: Builds Docker image for cross-compilation (~800MB download)
