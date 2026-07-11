@@ -28,6 +28,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          # Detached HEAD (not the main branch) so the action can fetch a fork PR whose
+          # head branch is itself named "main" into refs/heads/main without git refusing
+          # to write the checked-out branch.
+          ref: ${{ github.sha }}
           fetch-depth: 1
 
       - name: Run Claude Code
