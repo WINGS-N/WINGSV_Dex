@@ -64,6 +64,7 @@ func Up(cfg Config) error {
 	}
 	_ = Down(cfg)
 
+	ensureModule("wireguard")
 	link := &netlink.Wireguard{LinkAttrs: netlink.LinkAttrs{Name: cfg.Interface}}
 	if err := netlink.LinkAdd(link); err != nil {
 		return fmt.Errorf("wg: create %s: %w", cfg.Interface, err)

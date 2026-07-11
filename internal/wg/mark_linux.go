@@ -102,7 +102,7 @@ func SetupCgroupMark(name string, fwmark int, table string) (*CgroupMark, error)
 	if _, err := os.Stat(filepath.Join(cgroupRoot, "cgroup.controllers")); err != nil {
 		return nil, fmt.Errorf("wg: cgroup v2 not mounted at %s: %w", cgroupRoot, err)
 	}
-	ensureNftSocketModule()
+	ensureModule("nft_socket")
 	m := &CgroupMark{name: name, path: filepath.Join(cgroupRoot, name), table: table}
 	if err := os.Mkdir(m.path, 0o755); err != nil && !os.IsExist(err) {
 		return nil, fmt.Errorf("wg: create cgroup %s: %w", m.path, err)
@@ -159,15 +159,15 @@ func (m *CgroupMark) drainToRoot() {
 	}
 }
 
-// ensureNftSocketModule loads the nft_socket extension when it is not already present. The
-// "socket cgroupv2" match used by the cgroup marking rule lives in that module, and some
-// kernels (seen on custom builds) do not autoload it, so the rule install fails with ENOENT
-// until it is modprobed. The net-helper runs as root, so no extra elevation is needed.
-func ensureNftSocketModule() {
-	if b, err := os.ReadFile("/proc/modules"); err == nil && strings.Contains(string(b), "nft_socket ") {
+// ensureModule loads a kernel module by name when it is not already present. Some kernels
+// (seen on custom builds) do not autoload nft_socket (for the cgroup "socket cgroupv2"
+// match) or wireguard (for the tunnel device), so the operation fails until it is
+// modprobed. The net-helper runs as root, so no extra elevation is needed.
+func ensureModule(name string) {
+	if b, err := os.ReadFile("/proc/modules"); err == nil && strings.Contains(string(b), name+" ") {
 		return
 	}
-	_ = exec.Command("modprobe", "nft_socket").Run()
+	_ = exec.Command("modprobe", name).Run()
 }
 
 func runNft(args ...string) error {
