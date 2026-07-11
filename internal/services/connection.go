@@ -623,9 +623,10 @@ func (s *ConnectionService) connectXray() (ConnectionState, error) {
 	}
 	settings := s.store.XraySettings()
 	s.runtimeLogf("xray connect requested title=%q runtime=%s", profile.Title, settings.RuntimeMode)
+	// No TURN/auth sub-stage or stream counter on the Xray path, so leave Stage empty; the
+	// pill then reads a plain "Подключение...".
 	s.setState(ConnectionState{
 		Status:   StatusConnecting,
-		Stage:    StageTurn,
 		Endpoint: profile.Address,
 		Title:    profile.Title,
 	})

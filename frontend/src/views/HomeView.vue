@@ -227,7 +227,7 @@ const pillText = computed(() => {
     case 'connected':
       return n > 0 && m > 0 && n < m ? `Подключено (${n}/${m})` : 'Подключено';
     case 'stopping':
-      return 'Останавливаем vk-turn-proxy…';
+      return 'Останавливаем соединение…';
     default:
       return 'Отключено';
   }
