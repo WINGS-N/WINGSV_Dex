@@ -101,6 +101,9 @@ func main() {
 	})
 	connectionSvc.SetApp(app)
 	aboutSvc.SetApp(app)
+	logStore.SetListener(func(channel, line string) {
+		app.Event.Emit(services.LogLineEvent, services.LogLine{Channel: channel, Line: line})
+	})
 
 	// Owns the window and the system tray (show window, connect/disconnect, quit).
 	shell.New(app, shell.Deps{

@@ -50,12 +50,12 @@
         <div class="mt-4 rounded-[20px] border border-wings-divider bg-[#0c0c0c] p-4">
           <div class="mb-3 flex items-center justify-between gap-3 text-[12px] text-wings-muted">
             <span>{{ statusText }}</span>
-            <span>Версия: {{ snapshot.version }}</span>
+            <span>Строк: {{ lines.length }}</span>
           </div>
           <pre
             ref="logEl"
             class="max-h-[58vh] overflow-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-5 text-wings-text"
-            >{{ snapshot.text || 'Пока нет записей.' }}</pre>
+            >{{ displayText || 'Пока нет записей.' }}</pre>
         </div>
       </SamsungCard>
     </div>
@@ -72,6 +72,11 @@ import SamsungCard from '@/components/layout/SamsungCard.vue';
 import { closeOverlay } from '@/stores/nav.js';
 import { showToast } from '@/stores/toast.js';
 
+// Keep the on-screen buffer bounded like the on-disk store; drop the oldest in chunks so
+// trimming does not run on every appended line.
+const MAX_LINES = 4000;
+const TRIM_CHUNK = 500;
+
 const channels = [
   { value: 'runtime', label: 'Runtime' },
   { value: 'proxy', label: 'Proxy' },
@@ -79,36 +84,40 @@ const channels = [
 
 const channel = ref('runtime');
 const autoscroll = ref(true);
-const snapshot = ref({ channel: 'runtime', lines: [], text: '', version: 0 });
+const lines = ref([]);
 const logEl = ref(null);
-let timer = null;
-let offLogUpdate = null;
 let alive = false;
 let requestSeq = 0;
-let loading = false;
-let loadingId = 0;
 
+const displayText = computed(() => lines.value.join('\n'));
 const statusText = computed(() => `Канал: ${channel.value === 'runtime' ? 'Runtime' : 'Proxy'}`);
 
-async function loadSnapshot({ notify = false, force = false } = {}) {
-  if (loading && !force) return;
+async function scrollToEnd() {
+  if (!autoscroll.value) return;
+  await nextTick();
+  if (alive) logEl.value?.scrollTo?.(0, logEl.value.scrollHeight);
+}
+
+async function loadSnapshot({ notify = false } = {}) {
   const requestId = ++requestSeq;
-  loading = true;
-  loadingId = requestId;
-  const requestedChannel = channel.value;
+  const requested = channel.value;
   try {
-    const nextSnapshot = await LogsService.Snapshot(requestedChannel);
-    if (!alive || requestId !== requestSeq || requestedChannel !== channel.value) return;
-    snapshot.value = nextSnapshot;
-    if (autoscroll.value) {
-      await nextTick();
-      if (alive && requestId === requestSeq) logEl.value?.scrollTo?.(0, logEl.value.scrollHeight);
-    }
+    const snap = await LogsService.Snapshot(requested);
+    if (!alive || requestId !== requestSeq || requested !== channel.value) return;
+    lines.value = snap.lines || [];
+    await scrollToEnd();
   } catch {
     if (notify && alive && requestId === requestSeq) showToast('Журнал недоступен', { type: 'warn' });
-  } finally {
-    if (loadingId === requestId) loading = false;
   }
+}
+
+// Live push: append each new line for the visible channel without re-fetching the file.
+function onLine(ev) {
+  const d = ev?.data;
+  if (!d || d.channel !== channel.value) return;
+  lines.value.push(d.line);
+  if (lines.value.length > MAX_LINES) lines.value.splice(0, lines.value.length - (MAX_LINES - TRIM_CHUNK));
+  scrollToEnd();
 }
 
 async function refresh() {
@@ -116,53 +125,40 @@ async function refresh() {
 }
 
 async function copyText() {
-  const requestId = requestSeq;
   try {
-    await Clipboard.SetText(snapshot.value.text || '');
-    if (alive && requestId === requestSeq) showToast('Журнал скопирован', { type: 'success' });
+    await Clipboard.SetText(displayText.value);
+    showToast('Журнал скопирован', { type: 'success' });
   } catch {
-    if (alive && requestId === requestSeq) showToast('Не удалось скопировать', { type: 'warn' });
+    showToast('Не удалось скопировать', { type: 'warn' });
   }
 }
 
 async function requestClear() {
-  if (!alive) return;
-  const requestId = ++requestSeq;
-  const requestedChannel = channel.value;
+  const requested = channel.value;
   try {
-    loading = false;
-    loadingId = 0;
-    await LogsService.Clear(requestedChannel);
-    if (!alive || requestId !== requestSeq || requestedChannel !== channel.value) return;
+    await LogsService.Clear(requested);
+    if (requested === channel.value) lines.value = [];
     showToast('Журнал очищен', { type: 'success' });
-    await loadSnapshot({ notify: true, force: true });
   } catch {
-    if (alive && requestId === requestSeq) showToast('Не удалось очистить журнал', { type: 'warn' });
+    showToast('Не удалось очистить журнал', { type: 'warn' });
   }
 }
 
 watch(channel, () => {
-  requestSeq++;
-  loading = false;
-  snapshot.value = { channel: channel.value, lines: [], text: '', version: 0 };
+  lines.value = [];
   loadSnapshot({ notify: true });
 });
 
+let offLine = null;
 onMounted(async () => {
   alive = true;
   await loadSnapshot({ notify: true });
-  offLogUpdate = Events.On('logs:updated', (ev) => {
-    if (ev?.data?.channel === channel.value) loadSnapshot({ force: true });
-  });
-  timer = setInterval(() => loadSnapshot(), 5000);
+  offLine = Events.On('logs:line', onLine);
 });
 
 onBeforeUnmount(() => {
   alive = false;
   requestSeq++;
-  loading = false;
-  loadingId = 0;
-  if (timer) clearInterval(timer);
-  if (offLogUpdate) offLogUpdate();
+  if (offLine) offLine();
 });
 </script>

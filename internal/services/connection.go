@@ -373,8 +373,8 @@ func (s *ConnectionService) appendLogf(channel string, format string, args ...an
 	msg := applog.Redact(fmt.Sprintf(format, args...))
 	log.Printf("%s", msg)
 	if s.logStore != nil {
+		// The store's listener (wired in main) emits the line to the UI, so no event here.
 		_ = s.logStore.Append(channel, msg)
-		s.emit2(LogsUpdatedEvent, LogUpdate{Channel: channel})
 	}
 }
 

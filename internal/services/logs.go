@@ -2,11 +2,13 @@ package services
 
 import "github.com/WINGS-N/wingsv-dex/internal/applog"
 
-const LogsUpdatedEvent = "logs:updated"
+// LogLineEvent carries one appended log line to the frontend for live display (no re-fetch).
+const LogLineEvent = "logs:line"
 
-// LogUpdate tells the frontend which log channel changed.
-type LogUpdate struct {
+// LogLine is the payload for LogLineEvent.
+type LogLine struct {
 	Channel string `json:"channel"`
+	Line    string `json:"line"`
 }
 
 // LogsService exposes bounded runtime/proxy logs to the frontend.

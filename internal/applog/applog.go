@@ -10,9 +10,16 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 const MaxFileBytes = 256 * 1024
+
+// trimTarget is how far down a file is cut once it crosses MaxFileBytes. Trimming past the
+// cap (not to it) means the next append does not immediately trip the cap again, so the
+// expensive read+rewrite runs about once per (MaxFileBytes-trimTarget) of new data instead
+// of on every line.
+const trimTarget = MaxFileBytes * 3 / 4
 
 const maxLineBytes = 8 * 1024
 
@@ -24,7 +31,16 @@ const (
 type Store struct {
 	dir      string
 	versions map[string]uint64
+	listener func(channel, line string)
 	mu       sync.Mutex
+}
+
+// SetListener registers a callback invoked with each appended (redacted, final) line, so
+// the caller can push it to the UI live. Set once at startup.
+func (s *Store) SetListener(fn func(channel, line string)) {
+	s.mu.Lock()
+	s.listener = fn
+	s.mu.Unlock()
 }
 
 type Snapshot struct {
@@ -67,14 +83,19 @@ func (s *Store) Append(channel string, line string) error {
 	if !looksTimestamped(line) {
 		line = time.Now().UTC().Format(time.RFC3339Nano) + " " + line
 	}
-	line = trimLineBytes(line)
+	line = truncateBytes(line, maxLineBytes)
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	path := filepath.Join(s.dir, name)
 	if err := appendLine(path, line); err != nil {
+		s.mu.Unlock()
 		return err
 	}
 	s.versions[channel]++
+	listener := s.listener
+	s.mu.Unlock()
+	if listener != nil {
+		listener(channel, line)
+	}
 	return nil
 }
 
@@ -119,12 +140,16 @@ func appendLine(path string, line string) error {
 }
 
 func boundFile(path string) error {
-	raw, err := os.ReadFile(path)
+	fi, err := os.Stat(path)
 	if err != nil {
 		return err
 	}
-	if len(raw) <= MaxFileBytes {
-		return nil
+	if fi.Size() <= MaxFileBytes {
+		return nil // cheap common path: no read/rewrite until the cap is crossed
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
 	}
 	lines := splitLines(string(raw))
 	kept := make([]string, 0, len(lines))
@@ -132,11 +157,11 @@ func boundFile(path string) error {
 	for i := len(lines) - 1; i >= 0; i-- {
 		line := lines[i]
 		need := len(line) + 1
-		if size+need > MaxFileBytes && len(kept) > 0 {
+		if size+need > trimTarget && len(kept) > 0 {
 			break
 		}
-		if need > MaxFileBytes {
-			line = line[len(line)-(MaxFileBytes-1):]
+		if need > trimTarget {
+			line = truncateHeadBytes(line, trimTarget-1)
 			need = len(line) + 1
 		}
 		kept = append(kept, line)
@@ -163,11 +188,33 @@ func splitLines(text string) []string {
 	return strings.Split(text, "\n")
 }
 
-func trimLineBytes(s string) string {
-	if len(s) <= maxLineBytes {
+// truncateBytes trims s to at most max bytes without splitting the trailing UTF-8 rune.
+func truncateBytes(s string, max int) string {
+	if len(s) <= max {
 		return s
 	}
-	return s[:maxLineBytes]
+	s = s[:max]
+	for len(s) > 0 {
+		if r, size := utf8.DecodeLastRuneInString(s); r == utf8.RuneError && size <= 1 {
+			s = s[:len(s)-1]
+			continue
+		}
+		break
+	}
+	return s
+}
+
+// truncateHeadBytes keeps at most max trailing bytes of s, dropping any leading partial
+// UTF-8 rune so the kept tail stays valid.
+func truncateHeadBytes(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	s = s[len(s)-max:]
+	for len(s) > 0 && !utf8.RuneStart(s[0]) {
+		s = s[1:]
+	}
+	return s
 }
 
 func looksTimestamped(s string) bool {
@@ -202,7 +249,17 @@ func (w *LineWriter) Write(p []byte) (int, error) {
 	const truncatedSuffix = " [truncated]"
 	chunkBytes := maxLineBytes - len(truncatedSuffix)
 	for w.buf.Len() >= maxLineBytes {
-		line := string(w.buf.Next(chunkBytes)) + truncatedSuffix
+		// Cut on a UTF-8 rune boundary at or below chunkBytes so a split multibyte rune is
+		// not flushed as invalid bytes.
+		b := w.buf.Bytes()
+		cut := chunkBytes
+		for cut > 0 && !utf8.RuneStart(b[cut]) {
+			cut--
+		}
+		if cut == 0 {
+			cut = chunkBytes
+		}
+		line := string(w.buf.Next(cut)) + truncatedSuffix
 		if err := w.writeLine(line); err != nil {
 			return len(p), err
 		}
@@ -226,7 +283,7 @@ func (w *LineWriter) writeLine(line string) error {
 		return err
 	}
 	if w.tee != nil {
-		_, _ = io.WriteString(w.tee, Redact(trimLineBytes(line))+"\n")
+		_, _ = io.WriteString(w.tee, Redact(truncateBytes(line, maxLineBytes))+"\n")
 	}
 	return nil
 }
