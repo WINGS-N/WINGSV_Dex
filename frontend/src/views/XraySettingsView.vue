@@ -42,8 +42,8 @@
           />
           <SwitchRow
             title="Разрешать небезопасные сертификаты"
-            v-model="form.allowInsecure"
-            @update:model-value="save"
+            :model-value="form.allowInsecure"
+            @update:model-value="onAllowInsecure"
           />
           <SwitchRow title="Доступ из локальной сети" v-model="form.allowLan" @update:model-value="save" />
           <SwitchRow
@@ -70,12 +70,16 @@
             <SwitchRow
               title="Пароль"
               subtitle="Защитить локальный прокси логином и паролем"
-              v-model="form.localProxyAuthEnabled"
-              @update:model-value="save"
+              :model-value="form.localProxyAuthEnabled"
+              @update:model-value="(v) => onAuthToggle('local', v)"
             />
             <template v-if="form.localProxyAuthEnabled">
               <OneuiInput label="Логин" v-model="form.localProxyUsername" @update:model-value="saveDebounced" />
-              <OneuiInput label="Пароль" v-model="form.localProxyPassword" @update:model-value="saveDebounced" />
+              <OneuiInput
+                label="Пароль"
+                :model-value="form.localProxyPassword"
+                @update:model-value="(v) => onPassword('local', v)"
+              />
             </template>
           </template>
         </div>
@@ -90,12 +94,16 @@
             <SwitchRow
               title="Пароль"
               subtitle="Защитить локальный прокси логином и паролем"
-              v-model="form.httpProxyAuthEnabled"
-              @update:model-value="save"
+              :model-value="form.httpProxyAuthEnabled"
+              @update:model-value="(v) => onAuthToggle('http', v)"
             />
             <template v-if="form.httpProxyAuthEnabled">
               <OneuiInput label="Логин" v-model="form.httpProxyUsername" @update:model-value="saveDebounced" />
-              <OneuiInput label="Пароль" v-model="form.httpProxyPassword" @update:model-value="saveDebounced" />
+              <OneuiInput
+                label="Пароль"
+                :model-value="form.httpProxyPassword"
+                @update:model-value="(v) => onPassword('http', v)"
+              />
             </template>
           </template>
         </div>
@@ -114,6 +122,7 @@ import OneuiInput from '@/components/controls/OneuiInput.vue';
 import SwitchRow from '@/components/layout/SwitchRow.vue';
 import { closeOverlay } from '@/stores/nav.js';
 import { usePinnedScroll } from '@/composables/usePinnedScroll.js';
+import { WARN, warnConfirm, isPasswordTooSimple } from '@/stores/proxyWarnings.js';
 
 const rootEl = usePinnedScroll();
 
@@ -152,17 +161,56 @@ const form = reactive({
 });
 
 let loaded = false;
+const lastPw = { local: '', http: '' };
 
 onMounted(async () => {
   try {
     const s = await ProfilesService.XraySettings();
     Object.assign(form, s);
+    lastPw.local = form.localProxyPassword;
+    lastPw.http = form.httpProxyPassword;
   } catch {
     // backend not available (pure-vite preview)
   } finally {
     loaded = true;
   }
 });
+
+// Disabling proxy auth or enabling allow-insecure weakens security, so gate them behind
+// the countdown warning (mirroring the app); on cancel the switch stays where it was.
+async function onAuthToggle(which, v) {
+  if (!v && !(await warnConfirm(which === 'http' ? WARN.httpAuthDisable : WARN.socksAuthDisable))) return;
+  if (which === 'http') form.httpProxyAuthEnabled = v;
+  else form.localProxyAuthEnabled = v;
+  save();
+}
+
+async function onAllowInsecure(v) {
+  if (v && !(await warnConfirm(WARN.allowInsecure))) return;
+  form.allowInsecure = v;
+  save();
+}
+
+// A weak password warns after a short pause; on cancel the field reverts to the last value
+// that was accepted, so the weak one is never persisted.
+const pwTimers = {};
+function onPassword(which, v) {
+  const field = which === 'http' ? 'httpProxyPassword' : 'localProxyPassword';
+  form[field] = v;
+  if (pwTimers[which]) clearTimeout(pwTimers[which]);
+  pwTimers[which] = setTimeout(async () => {
+    const authOn = which === 'http' ? form.httpProxyAuthEnabled : form.localProxyAuthEnabled;
+    const user = which === 'http' ? form.httpProxyUsername : form.localProxyUsername;
+    if (authOn && v && isPasswordTooSimple(user, v)) {
+      if (!(await warnConfirm(which === 'http' ? WARN.httpWeak : WARN.socksWeak))) {
+        form[field] = lastPw[which];
+        return;
+      }
+    }
+    lastPw[which] = v;
+    save();
+  }, 500);
+}
 
 async function save() {
   if (!loaded) return;
@@ -184,5 +232,6 @@ function saveDebounced() {
 }
 onBeforeUnmount(() => {
   if (debounce) clearTimeout(debounce);
+  Object.values(pwTimers).forEach((t) => t && clearTimeout(t));
 });
 </script>

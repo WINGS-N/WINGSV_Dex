@@ -10,6 +10,8 @@ export const confirmState = reactive({
   confirmText: 'Подтвердить',
   cancelText: 'Отмена',
   danger: false,
+  icon: '', // '' | 'warning' - shows a centered warning triangle
+  countdown: 0, // seconds the confirm button stays disabled before it can be pressed
   resolve: null,
 });
 
@@ -21,6 +23,8 @@ export function confirm(options = {}) {
     // Pass cancelText: '' for a single-button (acknowledge-only) dialog.
     confirmState.cancelText = options.cancelText === undefined ? 'Отмена' : options.cancelText;
     confirmState.danger = !!options.danger;
+    confirmState.icon = options.icon || '';
+    confirmState.countdown = options.countdown || 0;
     confirmState.resolve = resolve;
     confirmState.open = true;
   });

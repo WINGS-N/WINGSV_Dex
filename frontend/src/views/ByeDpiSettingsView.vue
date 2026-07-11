@@ -24,10 +24,10 @@
           <template v-if="form.enabled">
             <OneuiInput label="Адрес" v-model="form.proxyIp" @update:model-value="saveDebounced" />
             <OneuiInput label="Порт" type="number" v-model="form.proxyPort" @update:model-value="saveDebounced" />
-            <SwitchRow title="Пароль" v-model="form.authEnabled" @update:model-value="save" />
+            <SwitchRow title="Пароль" :model-value="form.authEnabled" @update:model-value="onAuthToggle" />
             <template v-if="form.authEnabled">
               <OneuiInput label="Логин" v-model="form.username" @update:model-value="saveDebounced" />
-              <OneuiInput label="Пароль" v-model="form.password" @update:model-value="saveDebounced" />
+              <OneuiInput label="Пароль" :model-value="form.password" @update:model-value="onPassword" />
             </template>
           </template>
         </div>
@@ -113,6 +113,7 @@ import OneuiInput from '@/components/controls/OneuiInput.vue';
 import SwitchRow from '@/components/layout/SwitchRow.vue';
 import { closeOverlay } from '@/stores/nav.js';
 import { usePinnedScroll } from '@/composables/usePinnedScroll.js';
+import { WARN, warnConfirm, isPasswordTooSimple } from '@/stores/proxyWarnings.js';
 
 const rootEl = usePinnedScroll();
 
@@ -145,16 +146,42 @@ const form = reactive({
 });
 
 let loaded = false;
+let lastPw = '';
 
 onMounted(async () => {
   try {
     Object.assign(form, await ProfilesService.ByeDPISettings());
+    lastPw = form.password;
   } catch {
     // backend not available (pure-vite preview)
   } finally {
     loaded = true;
   }
 });
+
+// ByeDPI is a local SOCKS proxy, so disabling its auth gets the same security warning as
+// the xray SOCKS inbound.
+async function onAuthToggle(v) {
+  if (!v && !(await warnConfirm(WARN.socksAuthDisable))) return;
+  form.authEnabled = v;
+  save();
+}
+
+let pwTimer = null;
+function onPassword(v) {
+  form.password = v;
+  if (pwTimer) clearTimeout(pwTimer);
+  pwTimer = setTimeout(async () => {
+    if (form.authEnabled && v && isPasswordTooSimple(form.username, v)) {
+      if (!(await warnConfirm(WARN.socksWeak))) {
+        form.password = lastPw;
+        return;
+      }
+    }
+    lastPw = v;
+    save();
+  }, 500);
+}
 
 async function save() {
   if (!loaded) return;
@@ -182,5 +209,6 @@ function saveDebounced() {
 }
 onBeforeUnmount(() => {
   if (debounce) clearTimeout(debounce);
+  if (pwTimer) clearTimeout(pwTimer);
 });
 </script>
