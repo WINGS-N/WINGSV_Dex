@@ -175,7 +175,7 @@ func awgSetConf(cfg Config) error {
 func Down(cfg Config) error {
 	removeRules(cfg)
 	_ = SetTunnelMasquerade(false, cfg.Interface, AppsMark)
-	_ = SetBypassMasquerade(false, "", 0)
+	_ = SetBypassMasquerade(false, 0)
 	if link, err := netlink.LinkByName(cfg.Interface); err == nil {
 		return netlink.LinkDel(link)
 	}

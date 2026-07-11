@@ -58,7 +58,7 @@ func Run() error {
 			_ = appsCg.Close()
 			appsCg = nil
 		}
-		_ = wg.SetBypassMasquerade(false, "", 0)
+		_ = wg.SetBypassMasquerade(false, 0)
 	}
 	teardown := func() {
 		appsDown()
@@ -171,14 +171,10 @@ func Run() error {
 			}
 			if !cmd.Whitelist {
 				// Bypass mode: the default route is the tunnel, so the bypass apps' sockets
-				// pick the tunnel IP as their source. Masquerade their fwmark-tagged egress on
-				// the physical link so it leaves with a valid source and replies return.
-				if phys := wg.PhysicalEgressIface(); phys != "" {
-					if err := wg.SetBypassMasquerade(true, phys, cmd.AppMark); err != nil {
-						log.Printf("apps: bypass masquerade failed: %v", err)
-					}
-				} else {
-					log.Printf("apps: bypass masquerade skipped (no physical egress iface found)")
+				// pick the tunnel IP as their source. Masquerade their mark-tagged egress so it
+				// leaves the physical link with a valid source and replies return.
+				if err := wg.SetBypassMasquerade(true, cmd.AppMark); err != nil {
+					log.Printf("apps: bypass masquerade failed: %v", err)
 				}
 			}
 			log.Printf("apps split-tunnel up: %d app(s) marked 0x%x via cgroup %s (whitelist=%v)", len(cmd.Apps), cmd.AppMark, wg.AppsCgroup, cmd.Whitelist)

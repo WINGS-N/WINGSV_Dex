@@ -64,24 +64,27 @@ func SetTunnelMasquerade(on bool, ifname string, mark int) error {
 	return nil
 }
 
-// SetBypassMasquerade SNATs fwmark-tagged traffic leaving physIface to that interface's
-// address. In bypass mode the default route is the tunnel, so a bypass app's socket picks
-// the tunnel IP (10.x) as its source; the fwmark then routes it out the physical link where
-// that source is a martian the upstream router drops. Masquerading rewrites it to the
-// physical IP. vkturn's own underlay (already physical-sourced via SO_MARK on the socket) is
-// a no-op here. Whitelist mode uses SetTunnelMasquerade instead (masquerade into the tunnel).
-func SetBypassMasquerade(on bool, physIface string, mark int) error {
+// SetBypassMasquerade SNATs mark-tagged traffic to the outbound interface's address. In
+// bypass mode the default route is the tunnel, so a bypass app's socket picks the tunnel IP
+// (10.x) as its source; the mark then routes it out the physical link, where that source is
+// a martian the upstream router drops. Masquerading rewrites it to the physical IP. No
+// oifname scope is needed: only mark-tagged traffic leaves via the physical link (the
+// "not fwmark -> tunnel" rule plus the physical main-table default), and vkturn's own
+// underlay is already physical-sourced so masquerading it is a no-op. Not scoping to an
+// interface avoids depending on physical-egress detection, which was unreliable on live
+// mode switches. Whitelist mode uses SetTunnelMasquerade instead (masquerade into the tunnel).
+func SetBypassMasquerade(on bool, mark int) error {
 	_ = runNft("delete", "table", "inet", BypassMasqNftTable)
-	if !on || physIface == "" {
+	if !on {
 		return nil
 	}
 	ensureModule("nft_masq")
 	ruleset := fmt.Sprintf(`table inet %s {
 	chain postrouting {
 		type nat hook postrouting priority srcnat; policy accept;
-		oifname "%s" meta mark 0x%x counter masquerade
+		meta mark 0x%x counter masquerade
 	}
-}`, BypassMasqNftTable, physIface, mark)
+}`, BypassMasqNftTable, mark)
 	if err := runNftStdin(ruleset); err != nil {
 		return fmt.Errorf("wg: install bypass masquerade: %w", err)
 	}
