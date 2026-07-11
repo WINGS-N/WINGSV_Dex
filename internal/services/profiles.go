@@ -3,10 +3,15 @@
 package services
 
 import (
+	"context"
 	"errors"
+	"net/url"
+	"strings"
+	"time"
 
 	"github.com/WINGS-N/wingsv-dex/internal/config"
 	"github.com/WINGS-N/wingsv-dex/internal/wingsv"
+	"github.com/WINGS-N/wingsv-dex/internal/xraysubs"
 )
 
 // ProfilesService exposes the VK TURN profile store to the frontend.
@@ -134,6 +139,58 @@ func (s *ProfilesService) ImportXray(link string) (ProfilesResult, error) {
 	}
 	s.notify()
 	return s.snapshot(), nil
+}
+
+// SmartImport auto-detects the pasted content and imports it, switching the network backend
+// as needed: an http(s) URL is added as a subscription and fetched (3x-ui and the like); a
+// vless:// (or other xray share link) or an Xray-carrying wingsv:// becomes Xray profiles;
+// any other wingsv:// is imported as VK TURN profiles.
+func (s *ProfilesService) SmartImport(link string) (ProfilesResult, error) {
+	link = strings.TrimSpace(link)
+	low := strings.ToLower(link)
+	switch {
+	case strings.HasPrefix(low, "http://") || strings.HasPrefix(low, "https://"):
+		if err := s.importSubscription(link); err != nil {
+			return ProfilesResult{}, err
+		}
+	case config.LooksLikeXrayLink(link):
+		if _, err := s.store.ImportXray(link); err != nil {
+			return ProfilesResult{}, err
+		}
+	default:
+		// A wingsv:// link: try the Xray side first; if it carries no Xray profile, fall
+		// back to the VK TURN import.
+		if _, err := s.store.ImportXray(link); err != nil {
+			if _, verr := s.store.Import(link); verr != nil {
+				return ProfilesResult{}, verr
+			}
+		}
+	}
+	s.notify()
+	return s.snapshot(), nil
+}
+
+// importSubscription registers a subscription URL and fetches it into Xray profiles.
+func (s *ProfilesService) importSubscription(rawURL string) error {
+	title := rawURL
+	if u, err := url.Parse(rawURL); err == nil && u.Host != "" {
+		title = u.Host
+	}
+	sub, err := s.store.AddSubscription(title, rawURL)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+	defer cancel()
+	res, err := xraysubs.Fetch(ctx, sub)
+	if err != nil {
+		return err
+	}
+	q := res.Quota
+	if err := s.store.ApplySubscriptionNodes(sub.ID, res.Nodes, q.Upload, q.Download, q.Total, q.Expire); err != nil {
+		return err
+	}
+	return s.store.SetNetworkBackend(config.BackendXray)
 }
 
 // XrayActivate marks an Xray profile active by id.

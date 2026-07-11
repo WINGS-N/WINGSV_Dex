@@ -39,7 +39,7 @@
           <textarea
             v-model="linkText"
             rows="3"
-            :placeholder="isXray ? 'vless://...' : 'wingsv://...'"
+            placeholder="wingsv:// / vless:// / https://подписка"
             class="w-full resize-none rounded-xl border border-wings-divider bg-wings-input px-3 py-2 font-mono text-sm text-wings-text outline-none placeholder:text-wings-muted focus:border-wings-inputLine"
           ></textarea>
           <div class="flex gap-2">
@@ -242,12 +242,12 @@ async function importLink(link) {
   busy.value = true;
   error.value = '';
   try {
-    if (isXray.value) {
-      apply(await ProfilesService.ImportXray(value));
-    } else {
-      apply(await ProfilesService.ImportLink(value));
-      // Switch the shown backend to the imported profile's transport - unless it is
-      // AmneziaWG and the tooling is missing, which prompts to install and stays put.
+    // One smart import understands wingsv:// (VK TURN or Xray, single or many), vless://
+    // and other share links, and http(s) subscription URLs - switching backend as needed.
+    apply(await ProfilesService.SmartImport(value));
+    // For a VK TURN import, follow the imported profile's transport (unless AmneziaWG
+    // tooling is missing, which prompts to install and stays put).
+    if (!isXray.value) {
       const active = profiles.value.find((p) => p.id === activeId.value);
       const kind = active?.transportKind || 'wg';
       if (kind !== subBackend.value && (await ensureSubBackendAllowed(kind))) {
