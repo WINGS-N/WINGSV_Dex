@@ -1,12 +1,17 @@
 # Maintainer: WINGS-N <https://github.com/WINGS-N>
 #
-# Builds the current main from source, submodules included. Nothing to stamp:
+# The stable release, built from source:
 #   git clone https://github.com/WINGS-N/WINGSV_DeX
-#   cd WINGSV_DeX/build/linux/aur/wingsv-dex-git && makepkg -si
-# Install wingsv-dex-bin instead to take the prebuilt release tarball.
+#   cd WINGSV_DeX/build/linux/aur/wingsv-dex && makepkg -si
+# Siblings: wingsv-dex-git builds the current main, wingsv-dex-bin takes the
+# prebuilt release tarball.
+#
+# pkgver tracks the newest release tag; build/linux/aur/update-pkgbuild.sh moves it.
+# The source is the git tag rather than GitHub's generated tarball because that
+# tarball omits submodules, and the build needs them.
 
-pkgname=wingsv-dex-git
-pkgver=0.2.0.r5.g5d0224e
+pkgname=wingsv-dex
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="VPN client that hides WireGuard inside VK calls (VK TURN)"
 arch=('x86_64' 'aarch64')
@@ -17,22 +22,13 @@ license=('GPL-3.0-or-later')
 depends=('gtk4' 'webkitgtk-6.0' 'nftables')
 optdepends=('polkit: privilege elevation when bringing the VPN up')
 makedepends=('go' 'nodejs' 'pnpm' 'git')
-provides=('wingsv-dex')
-conflicts=('wingsv-dex' 'wingsv-dex-bin')
+conflicts=('wingsv-dex-git' 'wingsv-dex-bin')
 options=('!strip' '!lto')
-source=("$pkgname::git+$url.git")
+source=("$pkgname-$pkgver::git+$url.git#tag=v$pkgver")
 sha256sums=('SKIP')
 
-pkgver() {
-  cd "$pkgname"
-  # Tags are v-prefixed (v0.2.0). pkgver may not contain a dash, so the
-  # commits-since/hash suffix git describe appends is rewritten into dots.
-  git describe --long --tags --abbrev=7 2>/dev/null | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' ||
-    printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
-}
-
 prepare() {
-  cd "$pkgname"
+  cd "$pkgname-$pkgver"
   git submodule update --init --recursive
   # wails3 generates the frontend bindings; keep it out of the user's GOPATH.
   export GOPATH="$srcdir/gopath"
@@ -40,7 +36,7 @@ prepare() {
 }
 
 build() {
-  cd "$pkgname"
+  cd "$pkgname-$pkgver"
   export GOPATH="$srcdir/gopath"
   export PATH="$GOPATH/bin:$PATH"
   export CGO_CPPFLAGS="${CPPFLAGS}" CGO_CFLAGS="${CFLAGS}" CGO_LDFLAGS="${LDFLAGS}"
@@ -52,13 +48,13 @@ build() {
   mkdir -p bin
   # The GUI needs cgo for GTK/WebKit; the three helpers are static and do not.
   go build -trimpath -ldflags="-s -w" -o bin/wingsv-dex .
-  (cd external/vk-turn-proxy && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$srcdir/$pkgname/bin/vkturn" ./client)
-  (cd cmd/xrayhelper && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$srcdir/$pkgname/bin/xray" .)
-  (cd external/byedpi && make && cp ciadpi "$srcdir/$pkgname/bin/byedpi")
+  (cd external/vk-turn-proxy && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$srcdir/$pkgname-$pkgver/bin/vkturn" ./client)
+  (cd cmd/xrayhelper && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$srcdir/$pkgname-$pkgver/bin/xray" .)
+  (cd external/byedpi && make && cp ciadpi "$srcdir/$pkgname-$pkgver/bin/byedpi")
 }
 
 package() {
-  cd "$pkgname"
+  cd "$pkgname-$pkgver"
   # The app resolves xray/byedpi/vkturn next to its own executable, so they all
   # live in one private directory and /usr/bin gets a symlink. os.Executable()
   # resolves /proc/self/exe, so launching through the symlink still finds them.
