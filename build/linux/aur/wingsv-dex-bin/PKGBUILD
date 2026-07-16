@@ -1,0 +1,47 @@
+# Maintainer: WINGS-N <https://github.com/WINGS-N>
+#
+# Prebuilt package: installs the release tarball, so it needs no build toolchain.
+# Build wingsv-dex from source instead if you want to compile it yourself.
+#
+# pkgver and the sha256sums below are placeholders: the hashes only exist once a
+# release is built. Run build/linux/aur/update-pkgbuild.sh <version> after publishing
+# a release to stamp them, then push the stamped copy to the AUR repo.
+
+pkgname=wingsv-dex-bin
+pkgver=0.0.0
+pkgrel=1
+pkgdesc="VPN client that hides WireGuard inside VK calls (VK TURN)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/WINGS-N/WINGSV_DeX"
+license=('GPL-3.0-or-later')
+# GTK4 and WebKitGTK are deliberately not vendored: WebKitGTK spawns its helper
+# processes from a path baked in at compile time, so it has to be the system one.
+depends=('gtk4' 'webkitgtk-6.0' 'nftables')
+optdepends=('polkit: privilege elevation when bringing the VPN up')
+provides=('wingsv-dex')
+conflicts=('wingsv-dex')
+options=('!strip')
+source_x86_64=("$pkgname-$pkgver-x86_64.tar.gz::$url/releases/download/v$pkgver/wingsv-dex-linux-amd64.tar.gz")
+source_aarch64=("$pkgname-$pkgver-aarch64.tar.gz::$url/releases/download/v$pkgver/wingsv-dex-linux-arm64.tar.gz")
+source=("$pkgname-$pkgver.desktop::$url/raw/v$pkgver/build/linux/wingsv-dex.desktop"
+        "$pkgname-$pkgver.png::$url/raw/v$pkgver/build/appicon.png"
+        "$pkgname-$pkgver.LICENSE::$url/raw/v$pkgver/LICENSE")
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+package() {
+  # The app resolves xray/byedpi/vkturn next to its own executable, so they all
+  # live in one private directory and /usr/bin gets a symlink. os.Executable()
+  # resolves /proc/self/exe, so launching through the symlink still finds them.
+  install -Dm755 "$srcdir/wingsv-dex" "$pkgdir/usr/lib/wingsv-dex/wingsv-dex"
+  install -Dm755 "$srcdir/vkturn" "$pkgdir/usr/lib/wingsv-dex/vkturn"
+  install -Dm755 "$srcdir/xray" "$pkgdir/usr/lib/wingsv-dex/xray"
+  install -Dm755 "$srcdir/byedpi" "$pkgdir/usr/lib/wingsv-dex/byedpi"
+  install -d "$pkgdir/usr/bin"
+  ln -s /usr/lib/wingsv-dex/wingsv-dex "$pkgdir/usr/bin/wingsv-dex"
+
+  install -Dm644 "$srcdir/$pkgname-$pkgver.desktop" "$pkgdir/usr/share/applications/wingsv-dex.desktop"
+  install -Dm644 "$srcdir/$pkgname-$pkgver.png" "$pkgdir/usr/share/icons/hicolor/512x512/apps/wingsv-dex.png"
+  install -Dm644 "$srcdir/$pkgname-$pkgver.LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

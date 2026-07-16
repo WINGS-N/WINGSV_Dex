@@ -1,0 +1,75 @@
+# Maintainer: WINGS-N <https://github.com/WINGS-N>
+#
+# Builds the current main from source, submodules included. Nothing to stamp:
+#   git clone https://github.com/WINGS-N/WINGSV_DeX
+#   cd WINGSV_DeX/build/linux/aur/wingsv-dex-git && makepkg -si
+# Install wingsv-dex-bin instead to take the prebuilt release tarball.
+
+pkgname=wingsv-dex-git
+pkgver=0.2.0.r5.g5d0224e
+pkgrel=1
+pkgdesc="VPN client that hides WireGuard inside VK calls (VK TURN)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/WINGS-N/WINGSV_DeX"
+license=('GPL-3.0-or-later')
+# GTK4 and WebKitGTK are deliberately not vendored: WebKitGTK spawns its helper
+# processes from a path baked in at compile time, so it has to be the system one.
+depends=('gtk4' 'webkitgtk-6.0' 'nftables')
+optdepends=('polkit: privilege elevation when bringing the VPN up')
+makedepends=('go' 'nodejs' 'pnpm' 'git')
+provides=('wingsv-dex')
+conflicts=('wingsv-dex-bin')
+options=('!strip' '!lto')
+source=("$pkgname::git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$pkgname"
+  # Tags are v-prefixed (v0.2.0). pkgver may not contain a dash, so the
+  # commits-since/hash suffix git describe appends is rewritten into dots.
+  git describe --long --tags --abbrev=7 2>/dev/null | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' ||
+    printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  cd "$pkgname"
+  git submodule update --init --recursive
+  # wails3 generates the frontend bindings; keep it out of the user's GOPATH.
+  export GOPATH="$srcdir/gopath"
+  go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.113
+}
+
+build() {
+  cd "$pkgname"
+  export GOPATH="$srcdir/gopath"
+  export PATH="$GOPATH/bin:$PATH"
+  export CGO_CPPFLAGS="${CPPFLAGS}" CGO_CFLAGS="${CFLAGS}" CGO_LDFLAGS="${LDFLAGS}"
+
+  pnpm --dir frontend install --frozen-lockfile
+  wails3 generate bindings -clean=true -time-type=Date
+  pnpm --dir frontend build
+
+  mkdir -p bin
+  # The GUI needs cgo for GTK/WebKit; the three helpers are static and do not.
+  go build -trimpath -ldflags="-s -w" -o bin/wingsv-dex .
+  (cd external/vk-turn-proxy && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$srcdir/$pkgname/bin/vkturn" ./client)
+  (cd cmd/xrayhelper && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$srcdir/$pkgname/bin/xray" .)
+  (cd external/byedpi && make && cp ciadpi "$srcdir/$pkgname/bin/byedpi")
+}
+
+package() {
+  cd "$pkgname"
+  # The app resolves xray/byedpi/vkturn next to its own executable, so they all
+  # live in one private directory and /usr/bin gets a symlink. os.Executable()
+  # resolves /proc/self/exe, so launching through the symlink still finds them.
+  install -Dm755 bin/wingsv-dex "$pkgdir/usr/lib/wingsv-dex/wingsv-dex"
+  install -Dm755 bin/vkturn "$pkgdir/usr/lib/wingsv-dex/vkturn"
+  install -Dm755 bin/xray "$pkgdir/usr/lib/wingsv-dex/xray"
+  install -Dm755 bin/byedpi "$pkgdir/usr/lib/wingsv-dex/byedpi"
+  install -d "$pkgdir/usr/bin"
+  ln -s /usr/lib/wingsv-dex/wingsv-dex "$pkgdir/usr/bin/wingsv-dex"
+
+  install -Dm644 build/linux/wingsv-dex.desktop "$pkgdir/usr/share/applications/wingsv-dex.desktop"
+  install -Dm644 build/appicon.png "$pkgdir/usr/share/icons/hicolor/512x512/apps/wingsv-dex.png"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
