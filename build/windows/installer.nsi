@@ -3,8 +3,9 @@
 ; payload sets are embedded, and only the one matching the host's native arch is
 ; extracted at install time. Build with:
 ;   makensis -DSRCDIR_AMD64=<dir> -DSRCDIR_ARM64=<dir> -DVERSION=x.y.z build/windows/installer.nsi
-; Each SRCDIR holds that arch's wingsv-dex.exe, vkturn.exe and wintun.dll. Cross-builds
-; with makensis on Linux.
+; Each SRCDIR holds that arch's wingsv-dex.exe, vkturn.exe, xray.exe, byedpi.exe and
+; wintun.dll. The helpers are resolved next to the installed exe at runtime, so they
+; must be installed into $INSTDIR alongside it. Cross-builds with makensis on Linux.
 
 Unicode true
 !include "MUI2.nsh"
@@ -77,10 +78,14 @@ Section "Install"
   ${If} ${IsNativeARM64}
     File "${SRCDIR_ARM64}\${EXENAME}"
     File "${SRCDIR_ARM64}\vkturn.exe"
+    File "${SRCDIR_ARM64}\xray.exe"
+    File "${SRCDIR_ARM64}\byedpi.exe"
     File "${SRCDIR_ARM64}\wintun.dll"
   ${Else}
     File "${SRCDIR_AMD64}\${EXENAME}"
     File "${SRCDIR_AMD64}\vkturn.exe"
+    File "${SRCDIR_AMD64}\xray.exe"
+    File "${SRCDIR_AMD64}\byedpi.exe"
     File "${SRCDIR_AMD64}\wintun.dll"
   ${EndIf}
 
@@ -106,6 +111,8 @@ Section "Uninstall"
   SetShellVarContext all
   Delete "$INSTDIR\${EXENAME}"
   Delete "$INSTDIR\vkturn.exe"
+  Delete "$INSTDIR\xray.exe"
+  Delete "$INSTDIR\byedpi.exe"
   Delete "$INSTDIR\wintun.dll"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"

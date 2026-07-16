@@ -25,6 +25,10 @@ contents:
     dst: /usr/lib/wingsv-dex/wingsv-dex
   - src: ./bin/vkturn
     dst: /usr/lib/wingsv-dex/vkturn
+  - src: ./bin/xray
+    dst: /usr/lib/wingsv-dex/xray
+  - src: ./bin/byedpi
+    dst: /usr/lib/wingsv-dex/byedpi
   # os.Executable() resolves /proc/self/exe to the real path, so the app finds vkturn
   # next to it in /usr/lib/wingsv-dex even when launched via this symlink.
   - src: /usr/lib/wingsv-dex/wingsv-dex

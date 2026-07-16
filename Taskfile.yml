@@ -30,6 +30,13 @@ tasks:
   package:
     summary: Packages a production build of the application
     cmds:
+      # The helpers must be built here too, not only under `build`: packaging is
+      # its own entry point, and without these a clean tree ships an installer
+      # with no xray/byedpi/vkturn next to the app - which the app then fails to
+      # exec at runtime.
+      - task: build:vkturn
+      - task: build:xray
+      - task: build:byedpi
       - task: "{{.GOOS}}:package"
 
   run:

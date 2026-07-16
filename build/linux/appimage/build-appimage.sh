@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Build a self-contained AppImage bundling the GUI, the vkturn child and the whole
-# WebKitGTK/GTK4 runtime (incl. the WebKit subprocess helpers, which linuxdeploy does not
-# pick up on its own). Reproduces the recipe that works on both Arch (local) and Ubuntu
-# (CI); the WebKit helper directory is found dynamically since its path differs per distro.
+# Build a self-contained AppImage bundling the GUI, the vkturn/xray/byedpi children and
+# the whole WebKitGTK/GTK4 runtime (incl. the WebKit subprocess helpers, which linuxdeploy
+# does not pick up on its own). Reproduces the recipe that works on both Arch (local) and
+# Ubuntu (CI); the WebKit helper directory is found dynamically since its path differs per
+# distro.
 #
 # Usage: build/linux/appimage/build-appimage.sh <arch> <bindir> <outdir>
 #   arch:   x86_64 | aarch64
-#   bindir: directory containing the built `wingsv-dex` and `vkturn`
+#   bindir: directory containing the built wingsv-dex, vkturn, xray and byedpi
 #   outdir: where the .AppImage is written
 set -euxo pipefail
 
@@ -35,6 +36,8 @@ mkdir -p "$AD/usr/bin" "$AD/apprun-hooks"
 
 cp "$BINDIR/wingsv-dex" "$AD/usr/bin/wingsv-dex"
 cp "$BINDIR/vkturn" "$AD/usr/bin/vkturn"
+cp "$BINDIR/xray" "$AD/usr/bin/xray"
+cp "$BINDIR/byedpi" "$AD/usr/bin/byedpi"
 cp "$ROOT/build/appicon.png" "$AD/wingsv-dex.png"
 cp "$ROOT/build/linux/wingsv-dex.desktop" "$AD/wingsv-dex.desktop"
 
