@@ -21,6 +21,7 @@ import (
 
 	"github.com/xtls/libxray/share"
 	"github.com/xtls/libxray/xray"
+	"github.com/xtls/xray-core/common/platform"
 )
 
 func main() {
@@ -73,7 +74,8 @@ func cmdRun(argv []string) error {
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		return err
 	}
-	if err := xray.RunXray(cfg.DatDir, cfg.ConfigPath); err != nil {
+	initGeoEnv(cfg.DatDir)
+	if err := xray.RunXray(cfg.ConfigPath); err != nil {
 		return err
 	}
 	// Proxy-only runs (no tun inbound) leave TunName empty: there is no device to address
@@ -116,6 +118,18 @@ func cmdConvert() error {
 	return err
 }
 
+// initGeoEnv points xray at the directory holding geosite.dat / geoip.dat and the cert
+// bundle. libXray used to do this itself inside RunXray; since v26.7.11 it sets no
+// environment at all, so an unset asset dir would silently resolve next to the binary and
+// every geosite/geoip routing rule would fail to load.
+func initGeoEnv(datDir string) {
+	if datDir == "" {
+		return
+	}
+	os.Setenv(platform.AssetLocation, datDir)
+	os.Setenv(platform.CertLocation, datDir)
+}
+
 func cmdPing(argv []string) error {
 	fs := flag.NewFlagSet("ping", flag.ContinueOnError)
 	datDir := fs.String("datdir", "", "geo asset directory")
@@ -126,7 +140,8 @@ func cmdPing(argv []string) error {
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
-	delay, err := xray.Ping(*datDir, *configPath, *timeout, *url, *proxy)
+	initGeoEnv(*datDir)
+	delay, err := xray.Ping(*configPath, *timeout, *url, *proxy)
 	if err != nil {
 		return err
 	}
@@ -141,5 +156,6 @@ func cmdTest(argv []string) error {
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
-	return xray.TestXray(*datDir, *configPath)
+	initGeoEnv(*datDir)
+	return xray.TestXray(*configPath)
 }
